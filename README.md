@@ -2,138 +2,116 @@
 
 # Awake?
 
-### The green dot doesn't tell the whole story.
-
-Know whether it is a good time to call, better to text, or wiser to wait until morning.
-
-![Java](https://img.shields.io/badge/Java-Backend-E76F00?style=flat-square)
+![Java](https://img.shields.io/badge/Java-backend-E76F00?style=flat-square)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-API-6DB33F?style=flat-square)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=flat-square)
-![Android](https://img.shields.io/badge/Android-Kotlin-3DDC84?style=flat-square)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-4169E1?style=flat-square)
+
+**Awake?** is a social availability app that helps friends understand whether it is a good time to call, send a message, or wait until later.
+
+Online presence alone is ambiguous: a person may be awake but busy, available for messages but not calls, or asleep in another time zone. Awake? is intended to make that context explicit.
 
 </div>
 
----
+## Project status
 
-Someone can be online and still be unavailable.
+The repository currently focuses on the Java backend. Authentication and session management are implemented; the product features and Android client are the next part of the project.
 
-They may be working, sleeping in another time zone, open to messages but not calls, or simply taking a quiet evening. Most apps reduce all of that to a tiny green circle.
+### Implemented
 
-**Awake?** is a social availability app built around a more useful question:
+- User registration and authentication
+- Short-lived JWT access tokens
+- Opaque refresh tokens generated with `SecureRandom`
+- Refresh tokens stored as hashes rather than raw values
+- Refresh token rotation using one database record per session
+- Logout through refresh token revocation
+- Request validation and authentication error responses
+- PostgreSQL persistence with Flyway migrations
 
-> Not "Are they online?"  
-> **"Is this a good moment?"**
+### Product scope
 
-## One glance, a clearer answer
+| Feature                 | Purpose                                           |
+| :---------------------- | :------------------------------------------------ |
+| **Availability status** | Show whether calls or messages are welcome        |
+| **Friends**             | Share availability with a defined circle of users |
+| **Sleep schedule**      | Reflect expected sleeping hours automatically     |
+| **Time-zone awareness** | Present availability in the correct local context |
+| **Android client**      | Provide a native Kotlin interface for the service |
 
-| Status | What it means |
-| :--- | :--- |
-| **Available** | Calls and messages are welcome |
-| **Text only** | Messages are welcome, calls are not |
-| **Do not disturb** | Better check back later |
-| **Sleeping** | Probably tomorrow’s conversation |
+The planned availability states are **Available**, **Text only**, **Do not disturb**, and **Sleeping**.
 
-The long-term idea is simple: combine explicit status, sleep schedule, and time zone so availability can stay useful without demanding constant attention from the user.
+## Backend architecture
 
-## What is being built
-
-Awake? is designed as a small, complete social product rather than a collection of isolated features.
-
-| Part of the product | What it brings |
-| :--- | :--- |
-| **Identity** | Personal accounts and secure sessions across devices |
-| **Availability** | A clear answer to whether someone is open to calls or messages |
-| **Friends** | A private circle where availability is actually useful |
-| **Smart schedule** | Status that understands sleep hours and local time |
-| **Privacy** | Control over who can see each part of your availability |
-| **Android app** | A native place to check in or update your status in seconds |
-
-Behind that experience is a Java and Spring Boot API, PostgreSQL storage, secure token-based authentication, and a native Kotlin client. Each part has one job: keep the interaction quick for the user and the system predictable underneath.
-
-## Inside the backend
-
-The API follows a layered structure: transport details stay at the edge, business rules live in services, and persistence remains behind repositories.
+The diagram shows how authentication, request processing, and persistence connect inside the backend.
 
 ```mermaid
 flowchart TB
-    Client[Android client]
+    Client[API client]
 
-    subgraph API[Spring Boot API]
-        direction TB
-
+    subgraph Application[Spring Boot application]
         Security[Spring Security filter chain]
-        JWT[JWT authentication filter]
-        Jackson[Jackson JSON mapping]
-        Validation[Bean Validation]
-        Controllers[REST controllers]
-        Services[Application services]
-        Mappers[DTO / entity mappers]
-        Repositories[Spring Data repositories]
-        Errors[Global exception handler]
+        JwtFilter[JWT authentication filter]
+        Jackson[Jackson and Bean Validation]
+        Controller[REST controllers]
+        Service[Application services]
+        Repository[Spring Data JPA repositories]
 
-        Security --> JWT
-        JWT --> Jackson
-        Jackson --> Validation
-        Validation --> Controllers
-        Controllers --> Services
-        Services <--> Mappers
-        Services --> Repositories
-
-        Security -. authentication error .-> Errors
-        Validation -. invalid request .-> Errors
-        Services -. domain error .-> Errors
+        Security --> JwtFilter
+        JwtFilter --> Jackson
+        Jackson --> Controller
+        Controller --> Service
+        Service --> Repository
     end
 
-    Hibernate[Hibernate / JPA]
+    Hibernate[Hibernate]
     Database[(PostgreSQL)]
-    Flyway[Flyway migrations]
+    Flyway[Flyway]
 
-    Client -->|JSON over HTTPS| Security
-    Repositories --> Hibernate
+    Client -->|HTTP and JSON| Security
+    Repository --> Hibernate
     Hibernate --> Database
-    Flyway -->|schema versions| Database
-    Errors -->|consistent API response| Client
-    Controllers -->|response DTO| Client
+    Flyway -->|versioned migrations| Database
+    Controller -->|HTTP response| Client
 ```
 
-Authentication uses short-lived access tokens for everyday requests and stateful refresh tokens for long-lived sessions.
+## Authentication flow
+
+Access and refresh tokens have separate responsibilities. Access tokens are short-lived JWTs used for API authorization. Refresh tokens are opaque values whose hashes are persisted, allowing sessions to be rotated and explicitly revoked.
 
 ```mermaid
 flowchart LR
     Login[Login] --> Auth[Authentication service]
-    Auth --> Access[Access token]
-    Auth --> Refresh[Refresh token]
+    Auth --> Access[JWT access token]
+    Auth --> RawRefresh[Raw refresh token]
 
-    Access -->|sent with API request| Filter[JWT filter]
-    Filter -->|valid| Context[Security context]
-    Filter -->|expired| Renew[Refresh endpoint]
+    Access -->|Bearer token| JwtFilter[JWT filter]
+    JwtFilter -->|valid| Request[Authenticated request]
 
-    Refresh -->|stored session| TokenStore[(Refresh token store)]
-    Renew --> Validate{Valid and active?}
-    TokenStore --> Validate
+    RawRefresh -->|hash| Stored[(Refresh token record)]
+    RawRefresh -->|refresh request| Validate{Active and not expired?}
+    Stored --> Validate
 
-    Validate -->|yes| Rotate[Rotate token]
+    Validate -->|yes| Rotate[Generate token and replace stored hash]
     Rotate --> NewAccess[New access token]
     Rotate --> NewRefresh[New refresh token]
-    NewRefresh --> TokenStore
+    NewRefresh -->|hash| Stored
 
-    Validate -->|revoked, expired, or reused| Reject[Reject session]
-    Logout[Logout] -->|revoke| TokenStore
+    Validate -->|no| Unauthorized[401 Unauthorized]
+    Logout[Logout] -->|set revoked timestamp| Stored
 ```
 
-This split keeps regular requests fast while refresh token rotation, revocation, and reuse checks protect the longer-lived session.
-
-## Why this project
-
-Awake? is deliberately more than a CRUD exercise. It is a compact product with the kinds of problems that make backend development interesting: authentication, mutable state, relationships between users, privacy, time-dependent behaviour, and a mobile client that needs a clean contract.
-
-The aim is not to imitate a production system with unnecessary complexity. It is to build one thoughtfully, feature by feature, and let the architecture earn its shape.
-
----
+After rotation, the previous refresh token no longer matches the stored hash and cannot be used again. Logout marks the session record as revoked.
 
 <div align="center">
 
-**Built to make availability feel human.**  
-Fewer guesses. Fewer badly timed calls.
+## Tech stack
+
+| Area                    | Technologies                                              |
+| :---------------------- | :-------------------------------------------------------- |
+| **Backend**             | Java, Spring Boot                                         |
+| **Authentication**      | Spring Security, JWT access tokens, opaque refresh tokens |
+| **Persistence**         | PostgreSQL, Spring Data JPA, Hibernate                    |
+| **Database migrations** | Flyway                                                    |
+| **API boundary**        | Jackson, Bean Validation                                  |
+| **Mobile client**       | Kotlin, Android _(planned)_                               |
 
 </div>
