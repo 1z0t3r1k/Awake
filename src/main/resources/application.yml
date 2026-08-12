@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/am_i_awake
+    username: postgres
+    password: postgres
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    clean-disabled: true
+    validate-on-migrate: true
+
+  Jackson:
+    time-zone: UTC
+
+jwt:
+  private-key: file:./secrets/private.pem
+  public-key: file:./secrets/public.pem
+  access-token-ttl: 15m
+
+refresh-token:
+  ttl: 30d
