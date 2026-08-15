@@ -2,12 +2,16 @@ package com.amiawake.amiawake.user.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Getter
 @Entity
 @Table(name = "users")
 public class User {
@@ -25,6 +29,9 @@ public class User {
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private AvailabilityStatus status;
 
     protected User() {
     }
@@ -37,6 +44,7 @@ public class User {
         this.timeZone = timeZone;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+        this.status = AvailabilityStatus.AVAILABLE;
     }
 
     public void changeUsername(String username) {
@@ -47,31 +55,19 @@ public class User {
         this.username = username;
     }
 
-    public UUID getId() {
-        return id;
+    public void changeStatus(AvailabilityStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("Status cannot be null");
+        }
+
+        this.status = status;
+        this.updatedAt = Instant.now();
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public String getTimeZone() {
-        return timeZone;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
+    public enum AvailabilityStatus {
+        AVAILABLE,
+        TEXT_ONLY,
+        DO_NOT_DISTURB,
+        SLEEPING
     }
 }

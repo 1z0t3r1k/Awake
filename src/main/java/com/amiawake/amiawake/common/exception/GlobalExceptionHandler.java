@@ -58,4 +58,62 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(response);
     }
+
+    @ExceptionHandler(CannotFriendYourselfException.class)
+    public ResponseEntity<ApiErrorResponse> handleCannotFriendYourself(CannotFriendYourselfException exception) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(FriendshipAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleFriendshipAlreadyExists(FriendshipAlreadyExistsException exception) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
+    }
+
+    @ExceptionHandler({
+            CannotAcceptOwnFriendRequestException.class,
+            UserNotPartOfFriendshipException.class,
+            FriendshipNotPendingException.class
+    })
+    public ResponseEntity<ApiErrorResponse> handleFriendshipBadRequest(RuntimeException ex) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                ex.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(FriendRequestNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleFriendRequestNotFound(
+            FriendRequestNotFoundException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
 }

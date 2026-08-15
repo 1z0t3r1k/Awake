@@ -6,8 +6,6 @@ import com.amiawake.amiawake.auth.dto.LogoutRequest;
 import com.amiawake.amiawake.auth.dto.RefreshRequest;
 import com.amiawake.amiawake.auth.dto.RefreshResponse;
 import com.amiawake.amiawake.auth.service.AuthService;
-import com.amiawake.amiawake.common.security.JwtProperties;
-import com.amiawake.amiawake.common.security.JwtService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
 
-    public AuthController(AuthService authService, JwtService jwtService, JwtProperties properties) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
     }
 

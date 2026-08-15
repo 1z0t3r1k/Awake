@@ -3,8 +3,10 @@ package com.amiawake.amiawake.user.service;
 import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.common.exception.UsernameAlreadyExistsException;
 import com.amiawake.amiawake.common.security.JwtService;
+import com.amiawake.amiawake.user.dto.StatusResponse;
 import com.amiawake.amiawake.user.dto.UserCreateRequest;
 import com.amiawake.amiawake.user.entity.User;
+import com.amiawake.amiawake.user.entity.User.AvailabilityStatus;
 import com.amiawake.amiawake.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,6 @@ public class UserService {
         this.jwtService = jwtService;
     }
 
-    @Transactional
     public User getUser(UUID uuid) {
         return userRepository.findById(uuid)
                 .orElseThrow(() -> new UserNotFoundException(uuid));
@@ -50,5 +51,20 @@ public class UserService {
         User user = new User(UUID.randomUUID(), username, username, passwordHash, "UTC");
 
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public StatusResponse changeStatus(UUID id, AvailabilityStatus status) {
+        User user = getUser(id);
+
+        user.changeStatus(status);
+
+        return new StatusResponse(user.getStatus());
+    }
+
+    public StatusResponse getStatus(UUID id) {
+        User user = getUser(id);
+
+        return new StatusResponse(user.getStatus());
     }
 }
