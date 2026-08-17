@@ -116,4 +116,32 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(response);
     }
+
+    @ExceptionHandler(FriendshipDoesNotExistException.class)
+    public ResponseEntity<ApiErrorResponse> handleFriendshipDoesNotExist(FriendshipDoesNotExistException exception) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
+
+    @ExceptionHandler(FriendshipNotAcceptedException.class)
+    public ResponseEntity<ApiErrorResponse> handleFriendshipNotAccepted(
+            FriendshipNotAcceptedException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
+    }
 }

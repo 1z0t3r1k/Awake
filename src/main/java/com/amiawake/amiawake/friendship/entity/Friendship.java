@@ -114,4 +114,16 @@ public class Friendship {
             throw new CannotFriendYourselfException();
         }
     }
+
+    public User getOtherUser(User currentUser) {
+        if (user1.getId().equals(currentUser.getId())) {
+            return user2;
+        }
+
+        if (user2.getId().equals(currentUser.getId())) {
+            return user1;
+        }
+
+        throw new UserNotPartOfFriendshipException();
+    }
 }
