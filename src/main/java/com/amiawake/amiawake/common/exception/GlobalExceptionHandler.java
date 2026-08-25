@@ -144,4 +144,64 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .body(response);
     }
+
+    @ExceptionHandler(InvalidSleepScheduleException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidSleepSchedule(
+            InvalidSleepScheduleException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(SleepScheduleNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleSleepScheduleNotFound(
+            SleepScheduleNotFoundException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
+
+    @ExceptionHandler(SleepScheduleAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleSleepScheduleAlreadyExists(
+            SleepScheduleAlreadyExistsException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
+    }
+
+    @ExceptionHandler(UserStateDoesNotExistException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserStateDoesNotExist(
+            UserStateDoesNotExistException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
 }
