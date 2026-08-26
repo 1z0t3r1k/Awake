@@ -76,20 +76,20 @@ class UserServiceTest {
     }
 
     @Test
-    void getUserReturnsUserById() {
+    void getUserReturnsUserByIdById() {
         UUID userId = UUID.randomUUID();
         User user = user("alice");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        assertThat(userService.getUser(userId)).isSameAs(user);
+        assertThat(userService.getUserById(userId)).isSameAs(user);
     }
 
     @Test
-    void getUserThrowsWhenUserDoesNotExist() {
+    void getUserThrowsWhenUserByIdDoesNotExist() {
         UUID userId = UUID.randomUUID();
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.getUser(userId))
+        assertThatThrownBy(() -> userService.getUserById(userId))
                 .isInstanceOf(UserNotFoundException.class);
     }
 

@@ -30,7 +30,7 @@ public class UserStateController {
     public UserStateResponse getMyState(Authentication authentication) {
         UUID userId = UUID.fromString(authentication.getName());
 
-        User user = userService.getUser(userId);
+        User user = userService.getUserById(userId);
 
         return userStateService.getUserState(user);
     }

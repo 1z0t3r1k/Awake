@@ -41,9 +41,9 @@ class UserTest {
         User user = user("alice");
         Instant previousUpdatedAt = user.getUpdatedAt();
 
-        user.changeStatus(AvailabilityStatus.SLEEPING);
+        user.changeStatus(AvailabilityStatus.DO_NOT_DISTURB);
 
-        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.SLEEPING);
+        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.DO_NOT_DISTURB);
         assertThat(user.getUpdatedAt()).isAfterOrEqualTo(previousUpdatedAt);
     }
 

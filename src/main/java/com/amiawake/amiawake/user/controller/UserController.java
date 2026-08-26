@@ -2,6 +2,7 @@ package com.amiawake.amiawake.user.controller;
 
 import com.amiawake.amiawake.user.dto.StatusRequest;
 import com.amiawake.amiawake.user.dto.StatusResponse;
+import com.amiawake.amiawake.user.dto.TimeZoneRequest;
 import com.amiawake.amiawake.user.dto.UserCreateRequest;
 import com.amiawake.amiawake.user.dto.UserResponse;
 import com.amiawake.amiawake.user.entity.User;
@@ -32,7 +33,7 @@ public class UserController {
     @GetMapping("/me")
     public UserResponse getUser(Authentication authentication) {
         UUID id = UUID.fromString(authentication.getName());
-        User user = userService.getUser(id);
+        User user = userService.getUserById(id);
 
         return UserMapper.toResponse(user);
     }
@@ -57,5 +58,12 @@ public class UserController {
         UUID id = UUID.fromString(authentication.getName());
 
         return userService.getStatus(id);
+    }
+
+    @PatchMapping("me/time-zone")
+    public void changeTimeZone(Authentication authentication, @Valid @RequestBody TimeZoneRequest request) {
+        UUID userId = UUID.fromString(authentication.getName());
+
+        userService.changeTimeZone(userId, request);
     }
 }

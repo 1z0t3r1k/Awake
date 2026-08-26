@@ -4,6 +4,7 @@ import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.common.exception.UsernameAlreadyExistsException;
 import com.amiawake.amiawake.common.security.JwtService;
 import com.amiawake.amiawake.user.dto.StatusResponse;
+import com.amiawake.amiawake.user.dto.TimeZoneRequest;
 import com.amiawake.amiawake.user.dto.UserCreateRequest;
 import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
@@ -31,7 +32,7 @@ public class UserService {
         this.jwtService = jwtService;
     }
 
-    public User getUser(UUID uuid) {
+    public User getUserById(UUID uuid) {
         return userRepository.findById(uuid)
                 .orElseThrow(() -> new UserNotFoundException(uuid));
     }
@@ -55,7 +56,7 @@ public class UserService {
 
     @Transactional
     public StatusResponse changeStatus(UUID id, AvailabilityStatus status) {
-        User user = getUser(id);
+        User user = getUserById(id);
 
         user.changeStatus(status);
 
@@ -63,8 +64,15 @@ public class UserService {
     }
 
     public StatusResponse getStatus(UUID id) {
-        User user = getUser(id);
+        User user = getUserById(id);
 
         return new StatusResponse(user.getStatus());
+    }
+
+    @Transactional
+    public void changeTimeZone(UUID userId, TimeZoneRequest request) {
+        User user = getUserById(userId);
+
+        user.changeTimeZone(request.zoneId());
     }
 }

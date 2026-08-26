@@ -1,7 +1,7 @@
 package com.amiawake.amiawake.friendship.dto;
 
 import com.amiawake.amiawake.inference.states.SleepState;
-import com.amiawake.amiawake.user.entity.User.AvailabilityStatus;
+import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 
 import java.time.Instant;
 import java.util.Optional;
