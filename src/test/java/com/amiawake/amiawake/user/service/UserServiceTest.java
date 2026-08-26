@@ -5,6 +5,7 @@ import com.amiawake.amiawake.common.exception.UsernameAlreadyExistsException;
 import com.amiawake.amiawake.common.security.JwtService;
 import com.amiawake.amiawake.user.dto.StatusResponse;
 import com.amiawake.amiawake.user.dto.UserCreateRequest;
+import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +57,7 @@ class UserServiceTest {
         assertThat(user.getDisplayName()).isEqualTo("alice");
         assertThat(user.getPasswordHash()).isEqualTo("encoded-password");
         assertThat(user.getTimeZone()).isEqualTo("UTC");
-        assertThat(user.getStatus()).isEqualTo(User.AvailabilityStatus.AVAILABLE);
+        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.AVAILABLE);
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
@@ -98,22 +99,22 @@ class UserServiceTest {
         User user = user("alice");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        StatusResponse response = userService.changeStatus(userId, User.AvailabilityStatus.TEXT_ONLY);
-
-        assertThat(response.status()).isEqualTo(User.AvailabilityStatus.TEXT_ONLY);
-        assertThat(user.getStatus()).isEqualTo(User.AvailabilityStatus.TEXT_ONLY);
+        StatusResponse response = userService.changeStatus(userId, AvailabilityStatus.TEXT_ONLY);
+        // TODO: Починить
+        assertThat(response.status()).isEqualTo(AvailabilityStatus.TEXT_ONLY);
+        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.TEXT_ONLY);
     }
 
     @Test
     void getStatusReturnsCurrentStatus() {
         UUID userId = UUID.randomUUID();
         User user = user("alice");
-        user.changeStatus(User.AvailabilityStatus.DO_NOT_DISTURB);
+        user.changeStatus(AvailabilityStatus.DO_NOT_DISTURB);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         StatusResponse response = userService.getStatus(userId);
 
-        assertThat(response.status()).isEqualTo(User.AvailabilityStatus.DO_NOT_DISTURB);
+        assertThat(response.status()).isEqualTo(AvailabilityStatus.DO_NOT_DISTURB);
     }
 
     private static User user(String username) {

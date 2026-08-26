@@ -17,6 +17,8 @@ import com.amiawake.amiawake.friendship.mapper.FriendshipMapper;
 import com.amiawake.amiawake.friendship.repository.FriendshipRepository;
 import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.userstate.dto.UserStateResponse;
+import com.amiawake.amiawake.userstate.service.UserStateService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +30,14 @@ import java.util.UUID;
 public class FriendshipService {
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final UserStateService userStateService;
 
-    public FriendshipService(FriendshipRepository friendshipRepository, UserRepository userRepository) {
+    public FriendshipService(
+            FriendshipRepository friendshipRepository, UserRepository userRepository, UserStateService userStateService
+    ) {
         this.friendshipRepository = friendshipRepository;
         this.userRepository = userRepository;
+        this.userStateService = userStateService;
     }
 
     private User getUserById(UUID userId) {
@@ -102,11 +108,29 @@ public class FriendshipService {
 
     public List<FriendResponse> getFriends(UUID userId) {
         User user = getUserById(userId);
-        List<Friendship> friendships = friendshipRepository.findFriendships(user, FriendshipStatus.ACCEPTED);
-        List<FriendResponse> friendResponses = new ArrayList<>(friendships.size());
+
+        List<Friendship> friendships =
+                friendshipRepository.findFriendships(
+                        user,
+                        FriendshipStatus.ACCEPTED
+                );
+
+        List<FriendResponse> friendResponses =
+                new ArrayList<>(friendships.size());
 
         for (Friendship friendship : friendships) {
-            friendResponses.add(FriendshipMapper.toFriendResponse(friendship, user));
+            User friend = friendship.getOtherUser(user);
+
+            UserStateResponse friendState =
+                    userStateService.getUserState(friend);
+
+            friendResponses.add(
+                    FriendshipMapper.toFriendResponse(
+                            friendship,
+                            user,
+                            friendState
+                    )
+            );
         }
 
         return friendResponses;

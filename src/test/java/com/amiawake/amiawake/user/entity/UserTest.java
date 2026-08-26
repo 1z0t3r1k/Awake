@@ -21,7 +21,7 @@ class UserTest {
         assertThat(user.getDisplayName()).isEqualTo("Alice");
         assertThat(user.getPasswordHash()).isEqualTo("hash");
         assertThat(user.getTimeZone()).isEqualTo("UTC");
-        assertThat(user.getStatus()).isEqualTo(User.AvailabilityStatus.AVAILABLE);
+        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.AVAILABLE);
         assertThat(user.getCreatedAt()).isNotNull();
         assertThat(user.getUpdatedAt()).isNotNull();
         assertThat(user.getUpdatedAt()).isAfterOrEqualTo(user.getCreatedAt());
@@ -41,9 +41,9 @@ class UserTest {
         User user = user("alice");
         Instant previousUpdatedAt = user.getUpdatedAt();
 
-        user.changeStatus(User.AvailabilityStatus.SLEEPING);
+        user.changeStatus(AvailabilityStatus.SLEEPING);
 
-        assertThat(user.getStatus()).isEqualTo(User.AvailabilityStatus.SLEEPING);
+        assertThat(user.getStatus()).isEqualTo(AvailabilityStatus.SLEEPING);
         assertThat(user.getUpdatedAt()).isAfterOrEqualTo(previousUpdatedAt);
     }
 

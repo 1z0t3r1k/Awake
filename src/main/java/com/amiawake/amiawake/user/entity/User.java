@@ -63,11 +63,4 @@ public class User {
         this.status = status;
         this.updatedAt = Instant.now();
     }
-
-    public enum AvailabilityStatus {
-        AVAILABLE,
-        TEXT_ONLY,
-        DO_NOT_DISTURB,
-        SLEEPING
-    }
 }

@@ -5,6 +5,8 @@ import com.amiawake.amiawake.friendship.dto.FriendResponse;
 import com.amiawake.amiawake.friendship.dto.IncomingFriendRequestResponse;
 import com.amiawake.amiawake.friendship.dto.OutgoingFriendRequestResponse;
 import com.amiawake.amiawake.friendship.service.FriendshipService;
+import com.amiawake.amiawake.userstate.dto.UserStateResponse;
+import com.amiawake.amiawake.userstate.service.UserStateService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -24,9 +26,11 @@ import java.util.UUID;
 @RequestMapping("/api/v1/friendship")
 public class FriendshipController {
     private final FriendshipService friendshipService;
+    private final UserStateService userStateService;
 
-    public FriendshipController(FriendshipService friendshipService) {
+    public FriendshipController(FriendshipService friendshipService, UserStateService userStateService) {
         this.friendshipService = friendshipService;
+        this.userStateService = userStateService;
     }
 
     private UUID getIdByAuthentication(Authentication authentication) {
@@ -84,5 +88,12 @@ public class FriendshipController {
         UUID userId = getIdByAuthentication(authentication);
 
         return friendshipService.getOutgoingFriendRequests(userId);
+    }
+
+    @GetMapping("/{username}/state")
+    public UserStateResponse getFriendState(Authentication authentication, @PathVariable String username) {
+        UUID userId = getIdByAuthentication(authentication);
+
+        return userStateService.getFriendState(userId, username);
     }
 }

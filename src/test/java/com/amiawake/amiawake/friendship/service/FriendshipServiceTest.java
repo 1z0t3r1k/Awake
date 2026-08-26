@@ -14,8 +14,10 @@ import com.amiawake.amiawake.friendship.entity.Friendship;
 import com.amiawake.amiawake.friendship.entity.FriendshipPair;
 import com.amiawake.amiawake.friendship.entity.FriendshipStatus;
 import com.amiawake.amiawake.friendship.repository.FriendshipRepository;
+import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.userstate.service.UserStateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,9 +51,11 @@ class FriendshipServiceTest {
 
     private FriendshipService friendshipService;
 
+    private UserStateService userStateService;
+
     @BeforeEach
     void setUp() {
-        friendshipService = new FriendshipService(friendshipRepository, userRepository);
+        friendshipService = new FriendshipService(friendshipRepository, userRepository, userStateService);
     }
 
     @Test
@@ -160,7 +164,7 @@ class FriendshipServiceTest {
 
     @Test
     void getFriendsReturnsOtherAcceptedParticipantsWithStatus() {
-        bob.changeStatus(User.AvailabilityStatus.TEXT_ONLY);
+        bob.changeStatus(AvailabilityStatus.TEXT_ONLY);
         Friendship friendship = new Friendship(alice, bob, alice);
         friendship.acceptFriendship(bob);
         when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
@@ -170,7 +174,8 @@ class FriendshipServiceTest {
 
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().username()).isEqualTo("bob");
-        assertThat(response.getFirst().status()).isEqualTo(User.AvailabilityStatus.TEXT_ONLY);
+        // TODO: Починить
+        assertThat(response.getFirst().status()).isEqualTo(AvailabilityStatus.TEXT_ONLY);
     }
 
     @Test

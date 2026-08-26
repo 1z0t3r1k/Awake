@@ -5,6 +5,7 @@ import com.amiawake.amiawake.friendship.dto.IncomingFriendRequestResponse;
 import com.amiawake.amiawake.friendship.dto.OutgoingFriendRequestResponse;
 import com.amiawake.amiawake.friendship.entity.Friendship;
 import com.amiawake.amiawake.user.entity.User;
+import com.amiawake.amiawake.userstate.dto.UserStateResponse;
 
 public final class FriendshipMapper {
 
@@ -21,13 +22,18 @@ public final class FriendshipMapper {
 
     public static FriendResponse toFriendResponse(
             Friendship friendship,
-            User currentUser
+            User currentUser,
+            UserStateResponse userState
     ) {
         User friend = friendship.getOtherUser(currentUser);
 
         return new FriendResponse(
                 friend.getUsername(),
-                friend.getStatus()
+                friend.getDisplayName(),
+                friend.getStatus(),
+                userState.state(),
+                userState.confidence(),
+                userState.calculatedAt()
         );
     }
 
