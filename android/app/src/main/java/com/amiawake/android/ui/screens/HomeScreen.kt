@@ -81,7 +81,7 @@ fun HomeScreen(state: MainUiState, padding: PaddingValues, onRefresh: () -> Unit
                         item { EmptyState("Здесь пока никого нет", "Добавьте друга, чтобы видеть, когда ему удобно написать или позвонить.", action = "Добавить друга", onAction = onFriends) }
                     } else {
                         items(state.friends.friends.take(4), key = { it.username }) { friend ->
-                            FriendCard(friend.username, friend.status, { onFriend(friend.username) })
+                            FriendCard(friend, { onFriend(friend.username) })
                         }
                     }
                     if (state.loadError != null && dashboard != null) {

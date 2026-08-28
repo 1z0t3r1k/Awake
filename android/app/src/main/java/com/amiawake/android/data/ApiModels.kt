@@ -21,13 +21,25 @@ data class UserResponse(
     val username: String,
     val displayName: String,
     val timeZone: String,
+    val status: AvailabilityStatus,
 )
 
 @Serializable data class StatusRequest(val status: AvailabilityStatus)
 @Serializable data class StatusResponse(val status: AvailabilityStatus)
+@Serializable data class DisplayNameRequest(val displayName: String)
+@Serializable data class TimeZoneRequest(val zoneId: String)
+@Serializable data class UserSearchResponse(val userId: String, val username: String, val displayName: String)
 
 @Serializable data class FriendRequest(val username: String)
-@Serializable data class FriendResponse(val username: String, val status: AvailabilityStatus)
+@Serializable
+data class FriendResponse(
+    val username: String,
+    val displayName: String,
+    val status: AvailabilityStatus,
+    val sleepState: SleepState,
+    val sleepConfidence: Double,
+    val sleepStateCalculatedAt: String? = null,
+)
 @Serializable data class IncomingFriendRequest(val username: String)
 @Serializable data class OutgoingFriendRequest(val username: String)
 
@@ -58,7 +70,7 @@ data class ApiErrorResponse(
     val errors: Map<String, String> = emptyMap(),
 )
 
-@Serializable enum class AvailabilityStatus { AVAILABLE, TEXT_ONLY, DO_NOT_DISTURB, SLEEPING }
+@Serializable enum class AvailabilityStatus { AVAILABLE, TEXT_ONLY, DO_NOT_DISTURB }
 @Serializable enum class SleepState { SLEEPING, AWAKE, UNKNOWN }
 @Serializable enum class DeviceEventType {
     SCREEN_ON,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,10 @@ import com.amiawake.android.ui.components.ConfirmationDialog
 import com.amiawake.android.ui.components.StatusBadge
 import com.amiawake.android.ui.components.UserAvatar
 import com.amiawake.android.ui.model.copy
+import com.amiawake.android.ui.model.confidenceLabel
+import com.amiawake.android.ui.model.description
+import com.amiawake.android.ui.model.freshnessLabel
+import com.amiawake.android.ui.model.title
 
 @Composable
 fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, onDelete: (String) -> Unit) {
@@ -54,22 +59,38 @@ fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, onDelete
         Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        UserAvatar(friend.username, large = true)
+        UserAvatar(friend.displayName, large = true)
         Spacer(Modifier.height(16.dp))
-        Text("@${friend.username}", style = MaterialTheme.typography.headlineSmall)
+        Text(friend.displayName, style = MaterialTheme.typography.headlineSmall)
+        Text("@${friend.username}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
         StatusBadge(friend.status)
         Spacer(Modifier.height(28.dp))
         Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                Text("Сейчас", style = MaterialTheme.typography.titleMedium)
+                Text("Доступность", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(friend.status.copy().title, style = MaterialTheme.typography.headlineSmall)
                 Text(friend.status.copy().description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+            Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Определение сна", style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(friend.sleepState.title(forSelf = false), style = MaterialTheme.typography.headlineSmall)
+                Text(friend.sleepState.description(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.Info, null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Время последнего обновления пока недоступно", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column {
+                        Text(freshnessLabel(friend.sleepStateCalculatedAt), style = MaterialTheme.typography.bodyMedium)
+                        if (friend.sleepStateCalculatedAt != null) Text(confidenceLabel(friend.sleepConfidence), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

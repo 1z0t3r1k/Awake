@@ -3,16 +3,21 @@ package com.amiawake.amiawake.user.service;
 import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.common.exception.UsernameAlreadyExistsException;
 import com.amiawake.amiawake.common.security.JwtService;
+import com.amiawake.amiawake.user.dto.DisplayNameRequest;
 import com.amiawake.amiawake.user.dto.StatusResponse;
 import com.amiawake.amiawake.user.dto.TimeZoneRequest;
 import com.amiawake.amiawake.user.dto.UserCreateRequest;
+import com.amiawake.amiawake.user.dto.UserSearchResponse;
 import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
+import com.amiawake.amiawake.user.mapper.UserMapper;
 import com.amiawake.amiawake.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -74,5 +79,26 @@ public class UserService {
         User user = getUserById(userId);
 
         user.changeTimeZone(request.zoneId());
+    }
+
+    @Transactional
+    public void changeDisplayName(UUID userId, DisplayNameRequest request) {
+        User user = getUserById(userId);
+
+        user.changeDisplayName(request.displayName());
+    }
+
+    public List<UserSearchResponse> searchUsers(UUID userId, String query) {
+        User user = getUserById(userId);
+        List<User> foundUsers = userRepository.findTop20ByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(query, query);
+        List<UserSearchResponse> searchResponses = new ArrayList<>(foundUsers.size());
+
+        for (User foundUser : foundUsers) {
+            if (!foundUser.equals(user)) {
+                searchResponses.add(UserMapper.toUserSearchResponse(foundUser));
+            }
+        }
+
+        return searchResponses;
     }
 }

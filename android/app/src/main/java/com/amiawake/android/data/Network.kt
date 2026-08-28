@@ -69,7 +69,12 @@ private class SessionAuthenticator(
 
         val tokens = try {
             refreshClient.newCall(refreshRequest).execute().use { refreshResponse ->
-                if (!refreshResponse.isSuccessful) return@synchronized null
+                if (!refreshResponse.isSuccessful) {
+                    if (refreshResponse.code in 400..499) {
+                        runBlocking { sessionStore.clear() }
+                    }
+                    return@synchronized null
+                }
                 val raw = refreshResponse.body?.string() ?: return@synchronized null
                 json.decodeFromString<TokenResponse>(raw)
             }

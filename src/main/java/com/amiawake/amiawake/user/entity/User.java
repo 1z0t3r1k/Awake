@@ -8,10 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 
-import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.util.Objects;
 import java.util.UUID;
 
 @Getter
@@ -67,16 +65,18 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    public void changeTimeZone(String zoneIdStr) {
-        if (Objects.isNull(zoneIdStr) || zoneIdStr.trim().isEmpty()) {
-            throw new DateTimeException("Time zone must not be null or empty");
+    public void changeTimeZone(String zoneId) {
+        ZoneId.of(zoneId);
+        this.timeZone = zoneId;
+    }
+
+    public void changeDisplayName(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            throw new IllegalArgumentException("Display name must not be blank");
         }
 
-        try {
-            ZoneId.of(zoneIdStr);
-            this.timeZone = zoneIdStr;
-        } catch (DateTimeException exception) {
-            throw new DateTimeException("This time zone don't exists");
-        }
+        this.displayName = displayName.trim();
     }
+
+
 }

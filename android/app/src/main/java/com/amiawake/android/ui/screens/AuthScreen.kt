@@ -43,20 +43,22 @@ import androidx.compose.ui.unit.dp
 import com.amiawake.android.ui.components.PrimaryActionButton
 
 @Composable
-fun AuthScreen(loading: Boolean, serverError: String?, onSubmit: (String, String, Boolean) -> Unit) {
+fun AuthScreen(loading: Boolean, serverError: String?, onSubmit: (String, String, String, Boolean) -> Unit) {
     var username by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var register by remember { mutableStateOf(false) }
     var revealPassword by remember { mutableStateOf(false) }
     var attempted by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val usernameError = attempted && !validUsername(username)
+    val displayNameError = attempted && register && (displayName.isBlank() || displayName.trim().length > 32)
     val passwordError = attempted && password.length !in 8..256
     val submit = {
         attempted = true
-        if (!usernameError && !passwordError && validUsername(username) && password.length in 8..256) {
+        if (!usernameError && !displayNameError && !passwordError && validUsername(username) && (!register || displayName.isNotBlank()) && password.length in 8..256) {
             focus.clearFocus()
-            onSubmit(username, password, register)
+            onSubmit(username, password, displayName, register)
         }
     }
 
@@ -89,6 +91,20 @@ fun AuthScreen(loading: Boolean, serverError: String?, onSubmit: (String, String
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
+        if (register) {
+            OutlinedTextField(
+                value = displayName,
+                onValueChange = { if (it.length <= 32) displayName = it },
+                label = { Text("Как вас называть") },
+                supportingText = { if (displayNameError) Text("Введите имя до 32 символов") else Text("Это имя увидят ваши друзья") },
+                isError = displayNameError,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         OutlinedTextField(
             value = password,
             onValueChange = { if (it.length <= 256) password = it },

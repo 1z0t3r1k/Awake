@@ -1,6 +1,7 @@
 package com.amiawake.android.ui.model
 
 import com.amiawake.android.data.AvailabilityStatus
+import com.amiawake.android.data.FriendResponse
 import com.amiawake.android.data.SleepState
 import java.time.Duration
 import java.time.Instant
@@ -13,7 +14,19 @@ fun AvailabilityStatus.copy(): AvailabilityCopy = when (this) {
     AvailabilityStatus.AVAILABLE -> AvailabilityCopy("Можно звонить", "Вы открыты для звонков и сообщений")
     AvailabilityStatus.TEXT_ONLY -> AvailabilityCopy("Лучше написать", "Сейчас удобнее общаться сообщениями")
     AvailabilityStatus.DO_NOT_DISTURB -> AvailabilityCopy("Не беспокоить", "Вы просите не отвлекать вас")
-    AvailabilityStatus.SLEEPING -> AvailabilityCopy("Сплю", "Установлено вами вручную")
+}
+
+fun FriendResponse.presenceTitle(): String = when {
+    sleepState == SleepState.SLEEPING -> "Похоже, спит"
+    status == AvailabilityStatus.AVAILABLE -> "Можно звонить"
+    status == AvailabilityStatus.TEXT_ONLY -> "Лучше написать"
+    else -> "Не беспокоить"
+}
+
+fun FriendResponse.presenceDescription(): String = when {
+    sleepState == SleepState.SLEEPING -> freshnessLabel(sleepStateCalculatedAt)
+    sleepState == SleepState.UNKNOWN -> "Состояние сна пока неизвестно"
+    else -> freshnessLabel(sleepStateCalculatedAt)
 }
 
 fun SleepState.title(forSelf: Boolean = true): String = when (this) {

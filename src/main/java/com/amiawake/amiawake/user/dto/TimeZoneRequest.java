@@ -1,6 +1,6 @@
 package com.amiawake.amiawake.user.dto;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-public record TimeZoneRequest(@NotNull String zoneId) {
+public record TimeZoneRequest(@NotBlank String zoneId) {
 }

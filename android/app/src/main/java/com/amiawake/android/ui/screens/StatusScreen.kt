@@ -136,5 +136,4 @@ private fun statusIcon(status: AvailabilityStatus): ImageVector = when (status) 
     AvailabilityStatus.AVAILABLE -> Icons.Outlined.Call
     AvailabilityStatus.TEXT_ONLY -> Icons.Outlined.ChatBubbleOutline
     AvailabilityStatus.DO_NOT_DISTURB -> Icons.Outlined.DoNotDisturbOn
-    AvailabilityStatus.SLEEPING -> Icons.Outlined.Bedtime
 }

@@ -10,14 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PersonAdd
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -34,15 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.amiawake.android.data.UserSearchResponse
 import com.amiawake.android.ui.MainUiState
 import com.amiawake.android.ui.MainViewModel
 import com.amiawake.android.ui.components.ConfirmationDialog
 import com.amiawake.android.ui.components.EmptyState
+import com.amiawake.android.ui.components.ErrorState
 import com.amiawake.android.ui.components.FriendCard
 import com.amiawake.android.ui.components.UserAvatar
 
@@ -52,6 +50,7 @@ fun FriendsScreen(
     state: MainUiState,
     padding: PaddingValues,
     onRefresh: () -> Unit,
+    onSearch: (String) -> Unit,
     onSend: (String) -> Unit,
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
@@ -59,10 +58,8 @@ fun FriendsScreen(
     onFriend: (String) -> Unit,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var username by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
-    val focus = LocalFocusManager.current
-    val requestLoading = state.isRunning(MainViewModel.FRIEND_REQUEST_ACTION)
+    val searching = state.searchQuery.trim().length >= 2
 
     confirmation?.let { pending ->
         ConfirmationDialog(
@@ -77,63 +74,102 @@ fun FriendsScreen(
     Column(Modifier.fillMaxSize().padding(padding)) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
             Text("Друзья", style = MaterialTheme.typography.headlineSmall)
-            Text("Добавляйте близких по имени пользователя", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Найдите человека по имени или username", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
-                value = username,
-                onValueChange = { if (it.length <= 32) username = it },
-                label = { Text("Имя пользователя") },
-                leadingIcon = { Icon(Icons.Outlined.PersonAdd, null) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (username.isNotBlank() && !requestLoading) { onSend(username); username = "" } }),
+                value = state.searchQuery,
+                onValueChange = onSearch,
+                label = { Text("Поиск людей") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = {
+                    if (state.searchQuery.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(Icons.Outlined.Close, "Очистить поиск") }
+                },
+                supportingText = { if (state.searchQuery.isNotBlank() && !searching) Text("Введите хотя бы 2 символа") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             )
-            Button(
-                onClick = { focus.clearFocus(); onSend(username); username = "" },
-                enabled = username.isNotBlank() && !requestLoading,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                if (requestLoading) CircularProgressIndicator(strokeWidth = 2.dp)
-                else Text("Отправить заявку")
+        }
+
+        if (searching) {
+            SearchResults(state, onSearch, onSend, onAccept, onFriend)
+        } else {
+            PrimaryTabRow(selectedTabIndex = selectedTab) {
+                Tab(selectedTab == 0, { selectedTab = 0 }, text = { Text("Друзья") })
+                Tab(selectedTab == 1, { selectedTab = 1 }, text = { Text(if (state.friends.incoming.isEmpty()) "Заявки" else "Заявки · ${state.friends.incoming.size}") })
             }
-        }
-        PrimaryTabRow(selectedTabIndex = selectedTab) {
-            Tab(selectedTab == 0, { selectedTab = 0 }, text = { Text("Друзья") })
-            Tab(selectedTab == 1, { selectedTab = 1 }, text = { Text(if (state.friends.incoming.isEmpty()) "Заявки" else "Заявки · ${state.friends.incoming.size}") })
-        }
-        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (selectedTab == 0) {
-                    if (state.friends.friends.isEmpty()) item {
-                        EmptyState("Здесь пока никого нет", "Добавьте друга, чтобы видеть, когда ему удобно написать или позвонить.")
-                    }
-                    items(state.friends.friends, key = { it.username }) { friend -> FriendCard(friend.username, friend.status, { onFriend(friend.username) }) }
-                } else {
-                    item { Text("Входящие", style = MaterialTheme.typography.titleLarge) }
-                    if (state.friends.incoming.isEmpty()) item { EmptyState("Новых заявок пока нет", "Когда кто-то захочет добавить вас, заявка появится здесь.") }
-                    items(state.friends.incoming, key = { "in:${it.username}" }) { request ->
-                        RequestCard(
-                            request.username,
-                            "Хочет добавить вас",
-                            primary = "Принять",
-                            primaryLoading = state.isRunning("accept:${request.username}"),
-                            onPrimary = { onAccept(request.username) },
-                            secondary = "Отклонить",
-                            onSecondary = { confirmation = PendingConfirmation.decline(request.username) },
-                        )
-                    }
-                    item { Text("Исходящие", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
-                    if (state.friends.outgoing.isEmpty()) item { Text("Нет заявок, ожидающих ответа", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    items(state.friends.outgoing, key = { "out:${it.username}" }) { request ->
-                        RequestCard(
-                            request.username,
-                            "Заявка отправлена",
-                            primary = "Отменить заявку",
-                            primaryLoading = state.isRunning("cancel:${request.username}"),
-                            onPrimary = { confirmation = PendingConfirmation.cancel(request.username) },
-                        )
+            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (selectedTab == 0) {
+                        if (state.friends.friends.isEmpty()) item {
+                            EmptyState("Здесь пока никого нет", "Найдите друга, чтобы видеть, когда ему удобно написать или позвонить.")
+                        }
+                        items(state.friends.friends, key = { it.username }) { friend -> FriendCard(friend, { onFriend(friend.username) }) }
+                    } else {
+                        item { Text("Входящие", style = MaterialTheme.typography.titleLarge) }
+                        if (state.friends.incoming.isEmpty()) item { EmptyState("Новых заявок пока нет", "Когда кто-то захочет добавить вас, заявка появится здесь.") }
+                        items(state.friends.incoming, key = { "in:${it.username}" }) { request ->
+                            RequestCard(
+                                request.username,
+                                "Хочет добавить вас",
+                                primary = "Принять",
+                                primaryLoading = state.isRunning("accept:${request.username}"),
+                                onPrimary = { onAccept(request.username) },
+                                secondary = "Отклонить",
+                                onSecondary = { confirmation = PendingConfirmation.decline(request.username) },
+                            )
+                        }
+                        item { Text("Исходящие", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
+                        if (state.friends.outgoing.isEmpty()) item { Text("Нет заявок, ожидающих ответа", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        items(state.friends.outgoing, key = { "out:${it.username}" }) { request ->
+                            RequestCard(
+                                request.username,
+                                "Заявка отправлена",
+                                primary = "Отменить заявку",
+                                primaryLoading = state.isRunning("cancel:${request.username}"),
+                                onPrimary = { confirmation = PendingConfirmation.cancel(request.username) },
+                            )
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResults(state: MainUiState, onSearch: (String) -> Unit, onSend: (String) -> Unit, onAccept: (String) -> Unit, onFriend: (String) -> Unit) {
+    when {
+        state.searchLoading -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
+        state.searchError != null -> ErrorState(state.searchError, { onSearch(state.searchQuery) })
+        state.searchResults.isEmpty() -> EmptyState("Никого не нашли", "Попробуйте проверить написание имени или username.", icon = Icons.Outlined.Search)
+        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { Text("Результаты", style = MaterialTheme.typography.titleLarge) }
+            items(state.searchResults, key = { it.userId }) { user ->
+                val friend = state.friends.friends.any { it.username == user.username }
+                val incoming = state.friends.incoming.any { it.username == user.username }
+                val outgoing = state.friends.outgoing.any { it.username == user.username }
+                SearchUserCard(
+                    user = user,
+                    action = when { friend -> "Открыть"; incoming -> "Принять"; outgoing -> "Заявка отправлена"; else -> "Добавить" },
+                    loading = state.isRunning(MainViewModel.FRIEND_REQUEST_ACTION) || state.isRunning("accept:${user.username}"),
+                    enabled = !outgoing,
+                    onClick = when { friend -> ({ onFriend(user.username) }); incoming -> ({ onAccept(user.username) }); else -> ({ onSend(user.username) }) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchUserCard(user: UserSearchResponse, action: String, loading: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Surface(shape = RoundedCornerShape(18.dp), tonalElevation = 1.dp) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            UserAvatar(user.displayName)
+            Column(Modifier.weight(1f)) {
+                Text(user.displayName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("@${user.username}", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            TextButton(onClick = onClick, enabled = enabled && !loading) {
+                if (loading) CircularProgressIndicator(strokeWidth = 2.dp) else Text(action)
             }
         }
     }

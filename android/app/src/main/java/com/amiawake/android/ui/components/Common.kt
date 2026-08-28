@@ -37,8 +37,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.amiawake.android.data.AvailabilityStatus
+import com.amiawake.android.data.FriendResponse
 import com.amiawake.android.ui.model.copy
 import com.amiawake.android.ui.model.initials
+import com.amiawake.android.ui.model.presenceDescription
+import com.amiawake.android.ui.model.presenceTitle
 
 @Composable
 fun UserAvatar(name: String, modifier: Modifier = Modifier, large: Boolean = false) {
@@ -64,7 +67,7 @@ fun StatusBadge(status: AvailabilityStatus, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun FriendCard(username: String, status: AvailabilityStatus, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun FriendCard(friend: FriendResponse, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface,
@@ -72,12 +75,14 @@ fun FriendCard(username: String, status: AvailabilityStatus, onClick: () -> Unit
         tonalElevation = 1.dp,
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            UserAvatar(username)
+            UserAvatar(friend.displayName)
             Column(Modifier.weight(1f)) {
-                Text("@$username", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(status.copy().description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(friend.displayName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("@${friend.username} · ${friend.presenceDescription()}", color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            StatusBadge(status)
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(10.dp)) {
+                Text(friend.presenceTitle(), modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
         }
     }
 }

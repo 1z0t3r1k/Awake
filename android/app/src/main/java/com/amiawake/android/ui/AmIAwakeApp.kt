@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -100,7 +100,7 @@ private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
             if (nestedTitle != null) {
                 TopAppBar(
                     title = { Text(nestedTitle) },
-                    navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } },
+                    navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") } },
                 )
             }
         },
@@ -126,12 +126,21 @@ private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
                     HomeScreen(state, padding, viewModel::refreshAll, { navController.navigateRoot(AppDestination.Friends) }, { navController.navigate("friend/${Uri.encode(it)}") })
                 }
                 composable(AppDestination.Friends.route) {
-                    FriendsScreen(state, padding, viewModel::refreshAll, viewModel::sendFriendRequest, viewModel::acceptFriend, viewModel::declineRequest, viewModel::cancelRequest) {
+                    FriendsScreen(state, padding, viewModel::refreshAll, viewModel::searchUsers, viewModel::sendFriendRequest, viewModel::acceptFriend, viewModel::declineRequest, viewModel::cancelRequest) {
                         navController.navigate("friend/${Uri.encode(it)}")
                     }
                 }
                 composable(AppDestination.Status.route) { StatusScreen(state, padding, viewModel::setStatus) }
-                composable(AppDestination.Profile.route) { ProfileScreen(state, padding, { navController.navigate(Routes.SleepSchedule) }, viewModel::logout) }
+                composable(AppDestination.Profile.route) {
+                    ProfileScreen(
+                        state = state,
+                        padding = padding,
+                        onSchedule = { navController.navigate(Routes.SleepSchedule) },
+                        onDisplayName = viewModel::updateDisplayName,
+                        onTimeZone = viewModel::updateTimeZone,
+                        onLogout = viewModel::logout,
+                    )
+                }
                 composable(Routes.FriendDetail) { entry ->
                     val username = Uri.decode(entry.arguments?.getString("username").orEmpty())
                     val friend = state.friends.friends.firstOrNull { it.username == username }

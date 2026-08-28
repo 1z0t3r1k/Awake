@@ -7,9 +7,12 @@ class AmIAwakeRepository(
     private val sessionStore: SessionStore,
     private val eventQueue: EventQueue,
 ) {
-    suspend fun register(username: String, password: String) {
+    suspend fun register(username: String, password: String, displayName: String) {
         api.register(RegisterRequest(username.trim(), password))
         login(username, password)
+        if (displayName.trim().isNotEmpty() && displayName.trim() != username.trim()) {
+            api.setDisplayName(DisplayNameRequest(displayName.trim()))
+        }
     }
 
     suspend fun login(username: String, password: String) {
@@ -25,15 +28,30 @@ class AmIAwakeRepository(
         }
     }
 
-    suspend fun loadDashboard(): DashboardData = DashboardData(
-        user = api.me(),
-        status = api.getStatus().status,
-        userState = runCatching { api.getUserState() }.getOrNull(),
-        pendingEventCount = eventQueue.count(),
-    )
+    suspend fun loadDashboard(): DashboardData {
+        val user = api.me()
+        return DashboardData(
+            user = user,
+            status = user.status,
+            userState = runCatching { api.getUserState() }.getOrNull(),
+            pendingEventCount = eventQueue.count(),
+        )
+    }
 
     suspend fun setStatus(status: AvailabilityStatus): AvailabilityStatus =
         api.setStatus(StatusRequest(status)).status
+
+    suspend fun updateDisplayName(displayName: String): UserResponse {
+        api.setDisplayName(DisplayNameRequest(displayName.trim()))
+        return api.me()
+    }
+
+    suspend fun updateTimeZone(zoneId: String): UserResponse {
+        api.setTimeZone(TimeZoneRequest(zoneId.trim()))
+        return api.me()
+    }
+
+    suspend fun searchUsers(query: String): List<UserSearchResponse> = api.searchUsers(query.trim())
 
     suspend fun loadFriends(): FriendsData = FriendsData(
         friends = api.friends(),
