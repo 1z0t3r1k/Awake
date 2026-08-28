@@ -21,7 +21,9 @@ public record UserFeatures(
 
         ScheduleState scheduleState,
 
-        Optional<Long> minutesSinceLastHeartbeat
+        Optional<Long> minutesSinceLastHeartbeat,
         //        boolean hasThirtyMinuteCoverage
+
+        Optional<GoogleSleepFeature> googleSleepFeature
 ) {
 }

@@ -54,6 +54,14 @@ data class DeviceEventRequest(
     val occurredAt: String,
 )
 
+@Serializable
+data class SleepClassificationRequest(
+    val occurredAt: String,
+    val sleepConfidence: Int,
+    val motion: Int,
+    val light: Int,
+)
+
 @Serializable data class DeviceEventBatchRequest(val events: List<DeviceEventRequest>)
 
 @Serializable

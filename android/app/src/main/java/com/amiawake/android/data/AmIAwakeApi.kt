@@ -38,6 +38,8 @@ interface AmIAwakeApi {
     @DELETE("api/v1/sleep-schedule") suspend fun deleteSleepSchedule(): Response<Unit>
 
     @GET("api/v1/user-state/me") suspend fun getUserState(): UserStateResponse
+    @POST("api/v1/sleep-classifications")
+    suspend fun sendSleepClassification(@Body request: SleepClassificationRequest): Response<Unit>
     @POST("api/v1/device-events") suspend fun sendEvent(@Body request: DeviceEventRequest): Response<Unit>
     @POST("api/v1/device-events/batch") suspend fun sendEventBatch(@Body request: DeviceEventBatchRequest): Response<Unit>
 }

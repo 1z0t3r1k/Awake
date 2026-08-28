@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.amiawake.android"
-        minSdk = 26
+        minSdk = 29
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
@@ -54,6 +54,8 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.3")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

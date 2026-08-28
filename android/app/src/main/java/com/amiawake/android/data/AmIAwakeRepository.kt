@@ -76,6 +76,11 @@ class AmIAwakeRepository(
         api.setSleepScheduleEnabled(SleepScheduleEnabledRequest(enabled))
     suspend fun deleteSchedule() { api.deleteSleepSchedule() }
 
+    suspend fun sendSleepClassification(request: SleepClassificationRequest) {
+        val response = api.sendSleepClassification(request)
+        if (!response.isSuccessful) throw HttpException(response)
+    }
+
     suspend fun queueEvent(type: DeviceEventType) { eventQueue.enqueue(type) }
 
     suspend fun syncEvents(): Int {

@@ -1,5 +1,6 @@
 package com.amiawake.amiawake.inference.service;
 
+import com.amiawake.amiawake.inference.model.GoogleSleepFeature;
 import com.amiawake.amiawake.inference.model.InferenceResult;
 import com.amiawake.amiawake.inference.model.UserFeatures;
 import com.amiawake.amiawake.inference.states.ChargingState;
@@ -13,7 +14,6 @@ import java.util.Optional;
 
 @Service
 public class InferenceService {
-
     private static final long MAX_HEARTBEAT_AGE_MINUTES = 20;
 
     private static final long VERY_RECENT_UNLOCK_MINUTES = 5;
@@ -26,6 +26,10 @@ public class InferenceService {
     private static final long UNSCHEDULED_SLEEP_MINUTES = 120;
 
     private static final long LONG_CHARGING_MINUTES = 30;
+
+    private static final long MAX_GOOGLE_SLEEP_AGE_MINUTES = 20;
+    private static final int STRONG_GOOGLE_SLEEP_CONFIDENCE = 85;
+    private static final long GOOGLE_SUPPORTED_SLEEP_MINUTES = 45;
 
     public InferenceResult infer(UserFeatures features) {
         Objects.requireNonNull(features, "Features must not be null");
@@ -55,7 +59,7 @@ public class InferenceService {
         }
 
         if (minutesSinceLastUnlock.isPresent()
-                && minutesSinceLastUnlock.get() <= 15
+                && minutesSinceLastUnlock.get() <= RECENT_UNLOCK_MINUTES
                 && features.unlocksLast30Minutes() >= 2) {
 
             return new InferenceResult(
@@ -63,6 +67,14 @@ public class InferenceService {
                     0.90
             );
         }
+
+        boolean strongGoogleSleep =
+                features.googleSleepFeature()
+                        .filter(this::isFreshGoogleClassification)
+                        .map(GoogleSleepFeature::googleSleepConfidence)
+                        .map(confidence ->
+                                confidence >= STRONG_GOOGLE_SLEEP_CONFIDENCE)
+                        .orElse(false);
 
         if (features.screenState() == ScreenState.UNKNOWN) {
             return new InferenceResult(
@@ -161,9 +173,24 @@ public class InferenceService {
                 confidence += 0.05;
             }
 
+            if (strongGoogleSleep) {
+                confidence += 0.05;
+            }
+
             return new InferenceResult(
                     SleepState.SLEEPING,
-                    Math.min(confidence, 0.90)
+                    Math.min(confidence, 0.95)
+            );
+        }
+
+        if (strongGoogleSleep
+                && screenOffMinutes >= GOOGLE_SUPPORTED_SLEEP_MINUTES
+                && lastUnlockMinutes >= GOOGLE_SUPPORTED_SLEEP_MINUTES
+                && lowMotion) {
+
+            return new InferenceResult(
+                    SleepState.SLEEPING,
+                    0.82
             );
         }
 
@@ -187,5 +214,10 @@ public class InferenceService {
                 SleepState.UNKNOWN,
                 0.40
         );
+    }
+
+    private boolean isFreshGoogleClassification(GoogleSleepFeature feature) {
+        return feature.minutesSinceLastGoogleSleepClassification()
+                <= MAX_GOOGLE_SLEEP_AGE_MINUTES;
     }
 }

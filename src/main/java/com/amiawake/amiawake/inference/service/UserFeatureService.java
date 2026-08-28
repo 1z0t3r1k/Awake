@@ -3,10 +3,13 @@ package com.amiawake.amiawake.inference.service;
 import com.amiawake.amiawake.deviceevent.entity.DeviceEvent;
 import com.amiawake.amiawake.deviceevent.entity.DeviceEventType;
 import com.amiawake.amiawake.deviceevent.repository.DeviceEventRepository;
+import com.amiawake.amiawake.inference.model.GoogleSleepFeature;
 import com.amiawake.amiawake.inference.model.UserFeatures;
 import com.amiawake.amiawake.inference.states.ChargingState;
 import com.amiawake.amiawake.inference.states.ScheduleState;
 import com.amiawake.amiawake.inference.states.ScreenState;
+import com.amiawake.amiawake.sleepclassification.entity.SleepClassificationEvent;
+import com.amiawake.amiawake.sleepclassification.repository.SleepClassificationRepository;
 import com.amiawake.amiawake.sleepschedule.entity.SleepSchedule;
 import com.amiawake.amiawake.sleepschedule.repository.SleepScheduleRepository;
 import com.amiawake.amiawake.user.entity.User;
@@ -23,10 +26,15 @@ import java.util.Optional;
 public class UserFeatureService {
     private final DeviceEventRepository deviceEventRepository;
     private final SleepScheduleRepository sleepScheduleRepository;
+    private final SleepClassificationRepository sleepClassificationRepository;
 
-    public UserFeatureService(DeviceEventRepository deviceEventRepository, SleepScheduleRepository sleepScheduleRepository) {
+    public UserFeatureService(
+            DeviceEventRepository deviceEventRepository, SleepScheduleRepository sleepScheduleRepository,
+            SleepClassificationRepository sleepClassificationRepository
+    ) {
         this.deviceEventRepository = deviceEventRepository;
         this.sleepScheduleRepository = sleepScheduleRepository;
+        this.sleepClassificationRepository = sleepClassificationRepository;
     }
 
     // Get minutes since last ...
@@ -86,6 +94,29 @@ public class UserFeatureService {
         } else {
             return Optional.empty();
         }
+    }
+
+    Optional<GoogleSleepFeature> getGoogleSleepFeature(User user) {
+        Optional<SleepClassificationEvent> optionalSleepClassificationEvent =
+                sleepClassificationRepository.findTopByUserOrderByOccurredAtDesc(user);
+
+        if (optionalSleepClassificationEvent.isEmpty()) {
+            return Optional.empty();
+        }
+
+        SleepClassificationEvent sleepClassificationEvent = optionalSleepClassificationEvent.get();
+
+        Instant occurredAt = sleepClassificationEvent.getOccurredAt();
+        Instant currentTime = Instant.now();
+
+        if (currentTime.isBefore(occurredAt)) {
+            return Optional.empty();
+        }
+
+        long minutesSinceLastGoogleSleepClassification = Duration.between(occurredAt, currentTime).toMinutes();
+        int sleepConfidence = sleepClassificationEvent.getSleepConfidence();
+
+        return Optional.of(new GoogleSleepFeature(sleepConfidence, minutesSinceLastGoogleSleepClassification));
     }
 
     // ... last 30 minutes
@@ -247,7 +278,8 @@ public class UserFeatureService {
                 getChargingState(user),
                 getChargingDurationMinutes(user),
                 getScheduleState(user),
-                getMinutesSinceLastHeartbeat(user)
+                getMinutesSinceLastHeartbeat(user),
+                getGoogleSleepFeature(user)
         );
     }
 }
