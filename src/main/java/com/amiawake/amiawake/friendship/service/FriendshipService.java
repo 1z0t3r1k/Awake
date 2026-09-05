@@ -6,7 +6,6 @@ import com.amiawake.amiawake.common.exception.FriendshipAlreadyExistsException;
 import com.amiawake.amiawake.common.exception.FriendshipDoesNotExistException;
 import com.amiawake.amiawake.common.exception.FriendshipNotAcceptedException;
 import com.amiawake.amiawake.common.exception.FriendshipNotPendingException;
-import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.friendship.dto.FriendResponse;
 import com.amiawake.amiawake.friendship.dto.IncomingFriendRequestResponse;
 import com.amiawake.amiawake.friendship.dto.OutgoingFriendRequestResponse;
@@ -16,7 +15,7 @@ import com.amiawake.amiawake.friendship.entity.FriendshipStatus;
 import com.amiawake.amiawake.friendship.mapper.FriendshipMapper;
 import com.amiawake.amiawake.friendship.repository.FriendshipRepository;
 import com.amiawake.amiawake.user.entity.User;
-import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.user.service.UserService;
 import com.amiawake.amiawake.userstate.dto.UserStateResponse;
 import com.amiawake.amiawake.userstate.service.UserStateService;
 import org.springframework.stereotype.Service;
@@ -29,26 +28,18 @@ import java.util.UUID;
 @Service
 public class FriendshipService {
     private final FriendshipRepository friendshipRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final UserStateService userStateService;
 
     public FriendshipService(
-            FriendshipRepository friendshipRepository, UserRepository userRepository, UserStateService userStateService
+            FriendshipRepository friendshipRepository, UserService userService, UserStateService userStateService
     ) {
         this.friendshipRepository = friendshipRepository;
-        this.userRepository = userRepository;
+        this.userService = userService;
         this.userStateService = userStateService;
     }
 
-    private User getUserById(UUID userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
-    private User getUserByUsername(String username) {
-        return userRepository.findByUsername(username).orElseThrow(() -> new UserNotFoundException(username));
-    }
-
-    private Friendship getFriendshipByUsers(User user1, User user2) {
+    public Friendship getFriendshipByUsers(User user1, User user2) {
         FriendshipPair friendshipPair = Friendship.normalizeUsers(user1, user2);
 
         return friendshipRepository
@@ -56,9 +47,21 @@ public class FriendshipService {
                 .orElseThrow(FriendshipDoesNotExistException::new);
     }
 
+    public boolean areAcceptedFriends(User user1, User user2) {
+        FriendshipPair friendshipPair = Friendship.normalizeUsers(user1, user2);
+
+        return friendshipRepository
+                .findByUser1AndUser2(
+                        friendshipPair.firstUser(),
+                        friendshipPair.secondUser()
+                )
+                .map(friendship -> friendship.getStatus() == FriendshipStatus.ACCEPTED)
+                .orElse(false);
+    }
+
     public void sendFriendRequest(UUID requesterId, String username) {
-        User receiver = getUserByUsername(username);
-        User requester = getUserById(requesterId);
+        User receiver = userService.getUserByUsername(username);
+        User requester = userService.getUserById(requesterId);
 
         if (receiver.getId().equals(requester.getId())) {
             throw new CannotFriendYourselfException();
@@ -81,8 +84,8 @@ public class FriendshipService {
 
     @Transactional
     public void acceptFriendRequest(UUID acceptorId, String requesterUsername) {
-        User acceptor = getUserById(acceptorId);
-        User requester = getUserByUsername(requesterUsername);
+        User acceptor = userService.getUserById(acceptorId);
+        User requester = userService.getUserByUsername(requesterUsername);
 
         if (acceptorId.equals(requester.getId())) {
             throw new CannotAcceptOwnFriendRequestException();
@@ -94,7 +97,7 @@ public class FriendshipService {
     }
 
     public List<IncomingFriendRequestResponse> getIncomingFriendRequests(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
         List<Friendship> friendships = friendshipRepository.findIncomingRequests(user, FriendshipStatus.PENDING);
 
         List<IncomingFriendRequestResponse> friendRequests = new ArrayList<>(friendships.size());
@@ -107,7 +110,7 @@ public class FriendshipService {
     }
 
     public List<FriendResponse> getFriends(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         List<Friendship> friendships =
                 friendshipRepository.findFriendships(
@@ -138,8 +141,8 @@ public class FriendshipService {
 
     @Transactional
     public void deleteFriend(UUID userId, String username) {
-        User user = getUserById(userId);
-        User friendToDelete = getUserByUsername(username);
+        User user = userService.getUserById(userId);
+        User friendToDelete = userService.getUserByUsername(username);
 
         Friendship friendship = getFriendshipByUsers(user, friendToDelete);
 
@@ -152,8 +155,8 @@ public class FriendshipService {
 
     @Transactional
     public void deletePendingRequest(UUID userId, String username) {
-        User user = getUserById(userId);
-        User otherUser = getUserByUsername(username);
+        User user = userService.getUserById(userId);
+        User otherUser = userService.getUserByUsername(username);
 
         Friendship friendship = getFriendshipByUsers(user, otherUser);
 
@@ -165,7 +168,7 @@ public class FriendshipService {
     }
 
     public List<OutgoingFriendRequestResponse> getOutgoingFriendRequests(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
         List<Friendship> friendships = friendshipRepository.findOutgoingRequests(user, FriendshipStatus.PENDING);
 
         List<OutgoingFriendRequestResponse> friendRequests = new ArrayList<>(friendships.size());

@@ -217,4 +217,49 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.FORBIDDEN)
                 .body(response);
     }
+
+    @ExceptionHandler(CannotSubscribeToSelfException.class)
+    public ResponseEntity<ApiErrorResponse> handleCannotSubscribeToSelfException(
+            CannotSubscribeToSelfException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(WakeSubscriptionAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleWakeSubscriptionAlreadyExistsException(
+            WakeSubscriptionAlreadyExistsException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
+    }
+
+    @ExceptionHandler(WakeSubscriptionForbiddenException.class)
+    public ResponseEntity<ApiErrorResponse> handleWakeSubscriptionForbiddenException(
+            WakeSubscriptionForbiddenException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(response);
+    }
 }
