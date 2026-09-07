@@ -9,9 +9,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface DeviceRegistrationRepository extends JpaRepository<DeviceRegistration, UUID> {
-    Optional<DeviceRegistration> findByUserAndDeviceId(User user, UUID deviceId);
+    Optional<DeviceRegistration> findByUserAndFirebaseInstallationId(User user, String firebaseInstallationId);
+
+    Optional<DeviceRegistration> findByFirebaseInstallationId(String firebaseInstallationId);
 
     List<DeviceRegistration> findAllByUser(User user);
-
-    User user(User user);
 }

@@ -25,45 +25,43 @@ public class DeviceRegistration {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "push_token", nullable = false, unique = true)
-    private String pushToken;
+    @Column(name = "firebase_installation_id", nullable = false, unique = true)
+    private String firebaseInstallationId;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    @Column(name = "device_id", nullable = false)
-    private UUID deviceId;
+    @Column(name = "last_registered_at", nullable = false)
+    private Instant lastRegisteredAt;
 
     protected DeviceRegistration() {
     }
 
-    public DeviceRegistration(User user, UUID deviceId, String pushToken) {
+    public DeviceRegistration(User user, String firebaseInstallationId) {
         this.user = Objects.requireNonNull(user, "User must not be null");
-        this.deviceId = Objects.requireNonNull(deviceId, "Device id must not be null");
-        this.pushToken = Objects.requireNonNull(pushToken, "Push token must not be null");
+        Objects.requireNonNull(firebaseInstallationId, "Firebase installation id must not be null");
 
-        if (pushToken.isBlank()) {
-            throw new IllegalArgumentException("Push token must not be blank");
+        if (firebaseInstallationId.isBlank()) {
+            throw new IllegalArgumentException("Firebase installation id must not be blank");
         }
 
         this.id = UUID.randomUUID();
+        this.firebaseInstallationId = firebaseInstallationId;
 
         Instant now = Instant.now();
         this.createdAt = now;
-        this.updatedAt = now;
+        this.lastRegisteredAt = now;
     }
 
-    public void updatePushToken(String pushToken) {
-        Objects.requireNonNull(pushToken, "Push token must not be null");
+    public void refresh() {
+        this.lastRegisteredAt = Instant.now();
+    }
 
-        if (pushToken.isBlank()) {
-            throw new IllegalArgumentException("Push token must not be blank");
+    public void reassignTo(User user) {
+        Objects.requireNonNull(user, "User must not be null");
+
+        if (!this.user.getId().equals(user.getId())) {
+            this.user = user;
         }
-
-        this.pushToken = pushToken;
-        this.updatedAt = Instant.now();
     }
 }

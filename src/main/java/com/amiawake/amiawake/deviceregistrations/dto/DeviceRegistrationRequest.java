@@ -1,8 +1,6 @@
 package com.amiawake.amiawake.deviceregistrations.dto;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-import java.util.UUID;
-
-public record DeviceRegistrationRequest(@NotNull UUID deviceId, @NotNull String pushToken) {
+public record DeviceRegistrationRequest(@NotBlank String firebaseInstallationId) {
 }

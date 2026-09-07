@@ -25,23 +25,21 @@ public class DeviceRegistrationService {
     @Transactional
     public void upsertDeviceRegistration(UUID userId, DeviceRegistrationRequest request) {
         User user = userService.getUserById(userId);
-        Optional<DeviceRegistration> optionalDeviceRegistration = deviceRegistrationRepository.findByUserAndDeviceId(
-                user,
-                request.deviceId()
+        Optional<DeviceRegistration> optionalDeviceRegistration = deviceRegistrationRepository.findByFirebaseInstallationId(
+                request.firebaseInstallationId()
         );
 
         DeviceRegistration deviceRegistration;
 
         if (optionalDeviceRegistration.isEmpty()) {
-            deviceRegistration = new DeviceRegistration(user, request.deviceId(), request.pushToken());
+            deviceRegistration = new DeviceRegistration(user, request.firebaseInstallationId());
 
             deviceRegistrationRepository.save(deviceRegistration);
         } else {
             deviceRegistration = optionalDeviceRegistration.get();
 
-            if (!deviceRegistration.getPushToken().equals(request.pushToken())) {
-                deviceRegistration.updatePushToken(request.pushToken());
-            }
+            deviceRegistration.reassignTo(user);
+            deviceRegistration.refresh();
         }
     }
 
