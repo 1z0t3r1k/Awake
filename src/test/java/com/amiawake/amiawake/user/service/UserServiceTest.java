@@ -42,7 +42,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, passwordEncoder, jwtService);
+        userService = new UserService(userRepository, passwordEncoder);
     }
 
     @Test
@@ -90,6 +90,22 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.getUserById(userId))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void getUserReturnsUserByUsername() {
+        User user = user("alice");
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+
+        assertThat(userService.getUserByUsername("alice")).isSameAs(user);
+    }
+
+    @Test
+    void getUserThrowsWhenUsernameDoesNotExist() {
+        when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getUserByUsername("missing"))
                 .isInstanceOf(UserNotFoundException.class);
     }
 

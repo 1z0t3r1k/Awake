@@ -1,6 +1,5 @@
 package com.amiawake.amiawake.deviceevent.service;
 
-import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.deviceevent.dto.DeviceEventBatchRequest;
 import com.amiawake.amiawake.deviceevent.dto.DeviceEventRequest;
 import com.amiawake.amiawake.deviceevent.entity.DeviceEvent;
@@ -8,7 +7,7 @@ import com.amiawake.amiawake.deviceevent.entity.DeviceEventType;
 import com.amiawake.amiawake.deviceevent.repository.DeviceEventBatchRepository;
 import com.amiawake.amiawake.deviceevent.repository.DeviceEventRepository;
 import com.amiawake.amiawake.user.entity.User;
-import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.user.service.UserService;
 import com.amiawake.amiawake.userstate.service.UserStateCalculationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,27 +20,23 @@ import java.util.UUID;
 @Service
 public class DeviceEventService {
     private final DeviceEventRepository deviceEventRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final DeviceEventBatchRepository deviceEventBatchRepository;
     private final UserStateCalculationService userStateCalculationService;
 
     public DeviceEventService(
-            DeviceEventRepository deviceEventRepository, UserRepository userRepository,
+            DeviceEventRepository deviceEventRepository, UserService userService,
             DeviceEventBatchRepository deviceEventBatchRepository, UserStateCalculationService userStateCalculationService
     ) {
         this.deviceEventRepository = deviceEventRepository;
-        this.userRepository = userRepository;
+        this.userService = userService;
         this.deviceEventBatchRepository = deviceEventBatchRepository;
         this.userStateCalculationService = userStateCalculationService;
     }
 
-    private User getUserById(UUID userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
     @Transactional
     public boolean receiveEvent(UUID eventId, UUID userId, DeviceEventType type, Instant occurredAt) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         Instant receivedAt = Instant.now();
 
@@ -58,7 +53,7 @@ public class DeviceEventService {
 
     @Transactional
     public void receiveBatch(UUID userId, DeviceEventBatchRequest request) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
         List<DeviceEvent> deviceEventList = new ArrayList<>(request.events().size());
 
         for (DeviceEventRequest deviceEventRequest : request.events()) {

@@ -1,7 +1,6 @@
 package com.amiawake.amiawake.sleepschedule.service;
 
 import com.amiawake.amiawake.common.exception.SleepScheduleNotFoundException;
-import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleEnabledRequest;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleRequest;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleResponse;
@@ -9,7 +8,7 @@ import com.amiawake.amiawake.sleepschedule.entity.SleepSchedule;
 import com.amiawake.amiawake.sleepschedule.mapper.SleepScheduleMapper;
 import com.amiawake.amiawake.sleepschedule.repository.SleepScheduleRepository;
 import com.amiawake.amiawake.user.entity.User;
-import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.user.service.UserService;
 import org.springframework.data.repository.core.support.RepositoryMethodInvocationListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,24 +21,16 @@ import java.util.UUID;
 @Service
 public class SleepScheduleService {
     private final SleepScheduleRepository sleepScheduleRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final RepositoryMethodInvocationListener repositoryMethodInvocationListener;
 
     public SleepScheduleService(
-            SleepScheduleRepository sleepScheduleRepository, UserRepository userRepository,
+            SleepScheduleRepository sleepScheduleRepository, UserService userService,
             RepositoryMethodInvocationListener repositoryMethodInvocationListener
     ) {
         this.sleepScheduleRepository = sleepScheduleRepository;
-        this.userRepository = userRepository;
+        this.userService = userService;
         this.repositoryMethodInvocationListener = repositoryMethodInvocationListener;
-    }
-
-    private User getUserById(UUID userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
-    private User getUserByUsername(String username) {
-        return userRepository.findByUsername(username).orElseThrow(() -> new UserNotFoundException(username));
     }
 
     private SleepSchedule getSleepScheduleByUser(User user) {
@@ -47,7 +38,7 @@ public class SleepScheduleService {
     }
 
     public SleepScheduleResponse getSleepSchedule(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         SleepSchedule schedule = getSleepScheduleByUser(user);
 
@@ -56,7 +47,7 @@ public class SleepScheduleService {
 
     @Transactional
     public SleepScheduleResponse setSleepSchedule(UUID userId, SleepScheduleRequest request) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         Optional<SleepSchedule> optionalSchedule =
                 sleepScheduleRepository.findByUser(user);
@@ -85,7 +76,7 @@ public class SleepScheduleService {
 
     @Transactional
     public SleepScheduleResponse setEnabledStatus(UUID userId, SleepScheduleEnabledRequest request) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         SleepSchedule schedule = getSleepScheduleByUser(user);
 
@@ -96,7 +87,7 @@ public class SleepScheduleService {
 
     @Transactional
     public void deleteSleepSchedule(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         SleepSchedule schedule = getSleepScheduleByUser(user);
 
@@ -104,7 +95,7 @@ public class SleepScheduleService {
     }
 
     public boolean isUserSleeping(UUID userId) {
-        User user = getUserById(userId);
+        User user = userService.getUserById(userId);
 
         ZoneId zoneId = ZoneId.of(user.getTimeZone());
         LocalTime userTime = LocalTime.now(zoneId);

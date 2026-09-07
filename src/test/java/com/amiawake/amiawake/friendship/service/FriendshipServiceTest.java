@@ -14,9 +14,11 @@ import com.amiawake.amiawake.friendship.entity.Friendship;
 import com.amiawake.amiawake.friendship.entity.FriendshipPair;
 import com.amiawake.amiawake.friendship.entity.FriendshipStatus;
 import com.amiawake.amiawake.friendship.repository.FriendshipRepository;
+import com.amiawake.amiawake.inference.states.SleepState;
 import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
-import com.amiawake.amiawake.user.repository.UserRepository;
+import com.amiawake.amiawake.user.service.UserService;
+import com.amiawake.amiawake.userstate.dto.UserStateResponse;
 import com.amiawake.amiawake.userstate.service.UserStateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,21 +49,22 @@ class FriendshipServiceTest {
     private FriendshipRepository friendshipRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private UserService userService;
 
     private FriendshipService friendshipService;
 
+    @Mock
     private UserStateService userStateService;
 
     @BeforeEach
     void setUp() {
-        friendshipService = new FriendshipService(friendshipRepository, userRepository, userStateService);
+        friendshipService = new FriendshipService(friendshipRepository, userService, userStateService);
     }
 
     @Test
     void sendFriendRequestCreatesPendingFriendship() {
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
+        when(userService.getUserByUsername("bob")).thenReturn(bob);
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.empty());
 
         friendshipService.sendFriendRequest(alice.getId(), "bob");
@@ -77,7 +80,7 @@ class FriendshipServiceTest {
 
     @Test
     void sendFriendRequestRejectsMissingReceiver() {
-        when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
+        when(userService.getUserByUsername("missing")).thenThrow(new UserNotFoundException("missing"));
 
         assertThatThrownBy(() -> friendshipService.sendFriendRequest(alice.getId(), "missing"))
                 .isInstanceOf(UserNotFoundException.class);
@@ -87,8 +90,8 @@ class FriendshipServiceTest {
 
     @Test
     void sendFriendRequestRejectsSelfFriendship() {
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
 
         assertThatThrownBy(() -> friendshipService.sendFriendRequest(alice.getId(), "alice"))
                 .isInstanceOf(CannotFriendYourselfException.class);
@@ -99,8 +102,8 @@ class FriendshipServiceTest {
     @Test
     void sendFriendRequestRejectsExistingFriendship() {
         Friendship existingFriendship = new Friendship(alice, bob, alice);
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
+        when(userService.getUserByUsername("bob")).thenReturn(bob);
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(existingFriendship));
 
         assertThatThrownBy(() -> friendshipService.sendFriendRequest(alice.getId(), "bob"))
@@ -112,8 +115,8 @@ class FriendshipServiceTest {
     @Test
     void acceptFriendRequestAcceptsPendingRequest() {
         Friendship friendship = new Friendship(alice, bob, alice);
-        when(userRepository.findById(bob.getId())).thenReturn(Optional.of(bob));
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(userService.getUserById(bob.getId())).thenReturn(bob);
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         friendshipService.acceptFriendRequest(bob.getId(), "alice");
@@ -123,8 +126,8 @@ class FriendshipServiceTest {
 
     @Test
     void acceptFriendRequestRejectsOwnRequest() {
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
 
         assertThatThrownBy(() -> friendshipService.acceptFriendRequest(alice.getId(), "alice"))
                 .isInstanceOf(CannotAcceptOwnFriendRequestException.class);
@@ -132,8 +135,8 @@ class FriendshipServiceTest {
 
     @Test
     void acceptFriendRequestRejectsMissingFriendship() {
-        when(userRepository.findById(bob.getId())).thenReturn(Optional.of(bob));
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(userService.getUserById(bob.getId())).thenReturn(bob);
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> friendshipService.acceptFriendRequest(bob.getId(), "alice"))
@@ -143,7 +146,7 @@ class FriendshipServiceTest {
     @Test
     void getIncomingFriendRequestsReturnsRequesterUsernames() {
         Friendship aliceToBob = new Friendship(alice, bob, alice);
-        when(userRepository.findById(bob.getId())).thenReturn(Optional.of(bob));
+        when(userService.getUserById(bob.getId())).thenReturn(bob);
         when(friendshipRepository.findIncomingRequests(bob, FriendshipStatus.PENDING)).thenReturn(List.of(aliceToBob));
 
         List<IncomingFriendRequestResponse> response = friendshipService.getIncomingFriendRequests(bob.getId());
@@ -154,7 +157,7 @@ class FriendshipServiceTest {
     @Test
     void getOutgoingFriendRequestsReturnsReceivers() {
         Friendship aliceToBob = new Friendship(alice, bob, alice);
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
         when(friendshipRepository.findOutgoingRequests(alice, FriendshipStatus.PENDING)).thenReturn(List.of(aliceToBob));
 
         List<OutgoingFriendRequestResponse> response = friendshipService.getOutgoingFriendRequests(alice.getId());
@@ -167,8 +170,10 @@ class FriendshipServiceTest {
         bob.changeStatus(AvailabilityStatus.TEXT_ONLY);
         Friendship friendship = new Friendship(alice, bob, alice);
         friendship.acceptFriendship(bob);
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
         when(friendshipRepository.findFriendships(alice, FriendshipStatus.ACCEPTED)).thenReturn(List.of(friendship));
+        when(userStateService.getUserState(bob))
+                .thenReturn(new UserStateResponse(SleepState.UNKNOWN, 0.0, Optional.empty()));
 
         List<FriendResponse> response = friendshipService.getFriends(alice.getId());
 
@@ -181,8 +186,8 @@ class FriendshipServiceTest {
     @Test
     void deleteFriendDeletesAcceptedFriendship() {
         Friendship friendship = acceptedFriendship(alice, bob, alice, bob);
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(bob));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
+        when(userService.getUserByUsername("bob")).thenReturn(bob);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         friendshipService.deleteFriend(alice.getId(), "bob");
@@ -193,8 +198,8 @@ class FriendshipServiceTest {
     @Test
     void deleteFriendRejectsPendingFriendship() {
         Friendship friendship = new Friendship(alice, bob, alice);
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(bob));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
+        when(userService.getUserByUsername("bob")).thenReturn(bob);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         assertThatThrownBy(() -> friendshipService.deleteFriend(alice.getId(), "bob"))
@@ -206,8 +211,8 @@ class FriendshipServiceTest {
     @Test
     void deletePendingRequestDeletesPendingFriendship() {
         Friendship friendship = new Friendship(alice, bob, alice);
-        when(userRepository.findById(bob.getId())).thenReturn(Optional.of(bob));
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(userService.getUserById(bob.getId())).thenReturn(bob);
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         friendshipService.deletePendingRequest(bob.getId(), "alice");
@@ -218,8 +223,8 @@ class FriendshipServiceTest {
     @Test
     void deletePendingRequestRejectsAcceptedFriendship() {
         Friendship friendship = acceptedFriendship(alice, bob, alice, bob);
-        when(userRepository.findById(alice.getId())).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(bob));
+        when(userService.getUserById(alice.getId())).thenReturn(alice);
+        when(userService.getUserByUsername("bob")).thenReturn(bob);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         assertThatThrownBy(() -> friendshipService.deletePendingRequest(alice.getId(), "bob"))
@@ -231,8 +236,8 @@ class FriendshipServiceTest {
     @Test
     void userOrderIsNormalizedBeforeLookupWhenDeletingFriendship() {
         Friendship friendship = acceptedFriendship(alice, bob, alice, bob);
-        when(userRepository.findById(bob.getId())).thenReturn(Optional.of(bob));
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(userService.getUserById(bob.getId())).thenReturn(bob);
+        when(userService.getUserByUsername("alice")).thenReturn(alice);
         when(friendshipRepository.findByUser1AndUser2(alice, bob)).thenReturn(Optional.of(friendship));
 
         friendshipService.deleteFriend(bob.getId(), "alice");

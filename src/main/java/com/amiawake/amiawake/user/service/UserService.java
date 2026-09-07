@@ -2,7 +2,6 @@ package com.amiawake.amiawake.user.service;
 
 import com.amiawake.amiawake.common.exception.UserNotFoundException;
 import com.amiawake.amiawake.common.exception.UsernameAlreadyExistsException;
-import com.amiawake.amiawake.common.security.JwtService;
 import com.amiawake.amiawake.user.dto.DisplayNameRequest;
 import com.amiawake.amiawake.user.dto.StatusResponse;
 import com.amiawake.amiawake.user.dto.TimeZoneRequest;
@@ -25,21 +24,23 @@ import java.util.UUID;
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
 
     public UserService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            JwtService jwtService
+            PasswordEncoder passwordEncoder
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
     }
 
     public User getUserById(UUID uuid) {
         return userRepository.findById(uuid)
                 .orElseThrow(() -> new UserNotFoundException(uuid));
+    }
+
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(username));
     }
 
     @Transactional
