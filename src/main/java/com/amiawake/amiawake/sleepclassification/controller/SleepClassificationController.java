@@ -1,5 +1,6 @@
 package com.amiawake.amiawake.sleepclassification.controller;
 
+import com.amiawake.amiawake.common.security.AuthenticatedUserIdResolver;
 import com.amiawake.amiawake.sleepclassification.dto.SleepClassificationRequest;
 import com.amiawake.amiawake.sleepclassification.service.SleepClassificationService;
 import jakarta.validation.Valid;
@@ -17,19 +18,20 @@ import java.util.UUID;
 @RequestMapping("/api/v1/sleep-classifications")
 public class SleepClassificationController {
     private final SleepClassificationService sleepClassificationService;
+    private final AuthenticatedUserIdResolver authenticatedUserIdResolver;
 
-    public SleepClassificationController(SleepClassificationService sleepClassificationService) {
+    public SleepClassificationController(
+            SleepClassificationService sleepClassificationService,
+            AuthenticatedUserIdResolver authenticatedUserIdResolver
+    ) {
         this.sleepClassificationService = sleepClassificationService;
-    }
-
-    private UUID getIdByAuthentication(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        this.authenticatedUserIdResolver = authenticatedUserIdResolver;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void receiveSleepClassification(Authentication authentication, @RequestBody @Valid SleepClassificationRequest request) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         sleepClassificationService.receiveClassification(userId, request);
     }

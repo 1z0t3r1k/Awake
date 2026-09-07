@@ -1,5 +1,6 @@
 package com.amiawake.amiawake.friendship.controller;
 
+import com.amiawake.amiawake.common.security.AuthenticatedUserIdResolver;
 import com.amiawake.amiawake.friendship.dto.FriendRequest;
 import com.amiawake.amiawake.friendship.dto.FriendResponse;
 import com.amiawake.amiawake.friendship.dto.IncomingFriendRequestResponse;
@@ -27,20 +28,22 @@ import java.util.UUID;
 public class FriendshipController {
     private final FriendshipService friendshipService;
     private final UserStateService userStateService;
+    private final AuthenticatedUserIdResolver authenticatedUserIdResolver;
 
-    public FriendshipController(FriendshipService friendshipService, UserStateService userStateService) {
+    public FriendshipController(
+            FriendshipService friendshipService,
+            UserStateService userStateService,
+            AuthenticatedUserIdResolver authenticatedUserIdResolver
+    ) {
         this.friendshipService = friendshipService;
         this.userStateService = userStateService;
-    }
-
-    private UUID getIdByAuthentication(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        this.authenticatedUserIdResolver = authenticatedUserIdResolver;
     }
 
     @PostMapping("/requests")
     @ResponseStatus(HttpStatus.CREATED)
     public void sendFriendRequest(@Valid @RequestBody FriendRequest request, Authentication authentication) {
-        UUID requesterId = getIdByAuthentication(authentication);
+        UUID requesterId = authenticatedUserIdResolver.resolve(authentication);
 
         friendshipService.sendFriendRequest(requesterId, request.username());
     }
@@ -48,21 +51,21 @@ public class FriendshipController {
     @PostMapping("/{username}/accept")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void acceptFriendRequest(@PathVariable String username, Authentication authentication) {
-        UUID acceptorId = getIdByAuthentication(authentication);
+        UUID acceptorId = authenticatedUserIdResolver.resolve(authentication);
 
         friendshipService.acceptFriendRequest(acceptorId, username);
     }
 
     @GetMapping("/requests/incoming")
     public List<IncomingFriendRequestResponse> getIncomingFriendRequests(Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return friendshipService.getIncomingFriendRequests(userId);
     }
 
     @GetMapping
     public List<FriendResponse> getFriends(Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return friendshipService.getFriends(userId);
     }
@@ -70,7 +73,7 @@ public class FriendshipController {
     @DeleteMapping("/{username}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteFriend(@PathVariable String username, Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         friendshipService.deleteFriend(userId, username);
     }
@@ -78,21 +81,21 @@ public class FriendshipController {
     @DeleteMapping("/requests/{username}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePendingRequest(@PathVariable String username, Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         friendshipService.deletePendingRequest(userId, username);
     }
 
     @GetMapping("/requests/outgoing")
     public List<OutgoingFriendRequestResponse> getOutgoingFriendRequests(Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return friendshipService.getOutgoingFriendRequests(userId);
     }
 
     @GetMapping("/{username}/state")
     public UserStateResponse getFriendState(Authentication authentication, @PathVariable String username) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return userStateService.getFriendState(userId, username);
     }

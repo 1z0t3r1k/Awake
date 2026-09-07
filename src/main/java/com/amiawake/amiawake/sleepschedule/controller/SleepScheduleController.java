@@ -1,5 +1,6 @@
 package com.amiawake.amiawake.sleepschedule.controller;
 
+import com.amiawake.amiawake.common.security.AuthenticatedUserIdResolver;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleEnabledRequest;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleRequest;
 import com.amiawake.amiawake.sleepschedule.dto.SleepScheduleResponse;
@@ -22,18 +23,19 @@ import java.util.UUID;
 @RequestMapping("/api/v1/sleep-schedule")
 public class SleepScheduleController {
     private final SleepScheduleService sleepScheduleService;
+    private final AuthenticatedUserIdResolver authenticatedUserIdResolver;
 
-    public SleepScheduleController(SleepScheduleService sleepScheduleService) {
+    public SleepScheduleController(
+            SleepScheduleService sleepScheduleService,
+            AuthenticatedUserIdResolver authenticatedUserIdResolver
+    ) {
         this.sleepScheduleService = sleepScheduleService;
-    }
-
-    private UUID getIdByAuthentication(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        this.authenticatedUserIdResolver = authenticatedUserIdResolver;
     }
 
     @GetMapping
     public SleepScheduleResponse getSleepSchedule(Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return sleepScheduleService.getSleepSchedule(userId);
     }
@@ -43,7 +45,7 @@ public class SleepScheduleController {
             @Valid @RequestBody SleepScheduleRequest request,
             Authentication authentication
     ) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return sleepScheduleService.setSleepSchedule(userId, request);
     }
@@ -53,7 +55,7 @@ public class SleepScheduleController {
             @Valid @RequestBody SleepScheduleEnabledRequest request,
             Authentication authentication
     ) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return sleepScheduleService.setEnabledStatus(userId, request);
     }
@@ -61,7 +63,7 @@ public class SleepScheduleController {
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteSleepSchedule(Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         sleepScheduleService.deleteSleepSchedule(userId);
     }

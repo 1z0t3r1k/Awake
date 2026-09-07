@@ -1,5 +1,6 @@
 package com.amiawake.amiawake.user.controller;
 
+import com.amiawake.amiawake.common.security.AuthenticatedUserIdResolver;
 import com.amiawake.amiawake.user.dto.DisplayNameRequest;
 import com.amiawake.amiawake.user.dto.StatusRequest;
 import com.amiawake.amiawake.user.dto.StatusResponse;
@@ -31,18 +32,16 @@ import java.util.UUID;
 @RequestMapping("/api/v1/users")
 public class UserController {
     private final UserService userService;
+    private final AuthenticatedUserIdResolver authenticatedUserIdResolver;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AuthenticatedUserIdResolver authenticatedUserIdResolver) {
         this.userService = userService;
-    }
-
-    private UUID getUserByAuthentication(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        this.authenticatedUserIdResolver = authenticatedUserIdResolver;
     }
 
     @GetMapping("/me")
     public UserResponse getUser(Authentication authentication) {
-        UUID id = getUserByAuthentication(authentication);
+        UUID id = authenticatedUserIdResolver.resolve(authentication);
         User user = userService.getUserById(id);
 
         return UserMapper.toResponse(user);
@@ -58,14 +57,14 @@ public class UserController {
 
     @PatchMapping("/me/status")
     public StatusResponse changeStatus(@RequestBody @Valid StatusRequest request, Authentication authentication) {
-        UUID id = getUserByAuthentication(authentication);
+        UUID id = authenticatedUserIdResolver.resolve(authentication);
 
         return userService.changeStatus(id, request.status());
     }
 
     @GetMapping("/me/status")
     public StatusResponse getStatus(Authentication authentication) {
-        UUID id = getUserByAuthentication(authentication);
+        UUID id = authenticatedUserIdResolver.resolve(authentication);
 
         return userService.getStatus(id);
     }
@@ -73,7 +72,7 @@ public class UserController {
     @PatchMapping("/me/time-zone")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void changeTimeZone(Authentication authentication, @RequestBody @Valid TimeZoneRequest request) {
-        UUID userId = getUserByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         userService.changeTimeZone(userId, request);
     }
@@ -81,14 +80,14 @@ public class UserController {
     @PatchMapping("/me/display-name")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void changeDisplayName(Authentication authentication, @RequestBody @Valid DisplayNameRequest request) {
-        UUID userId = getUserByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         userService.changeDisplayName(userId, request);
     }
 
     @GetMapping("/search")
     public List<UserSearchResponse> searchUsers(Authentication authentication, @RequestParam @NotBlank String query) {
-        UUID userId = getUserByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return userService.searchUsers(userId, query.strip());
     }

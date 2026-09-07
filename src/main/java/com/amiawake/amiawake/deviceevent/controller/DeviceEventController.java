@@ -1,9 +1,9 @@
 package com.amiawake.amiawake.deviceevent.controller;
 
+import com.amiawake.amiawake.common.security.AuthenticatedUserIdResolver;
 import com.amiawake.amiawake.deviceevent.dto.DeviceEventBatchRequest;
 import com.amiawake.amiawake.deviceevent.dto.DeviceEventRequest;
 import com.amiawake.amiawake.deviceevent.service.DeviceEventService;
-import jakarta.servlet.annotation.HttpConstraint;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,13 +20,14 @@ import java.util.UUID;
 @RequestMapping("/api/v1/device-events")
 public class DeviceEventController {
     private final DeviceEventService deviceEventService;
+    private final AuthenticatedUserIdResolver authenticatedUserIdResolver;
 
-    public DeviceEventController(DeviceEventService deviceEventService) {
+    public DeviceEventController(
+            DeviceEventService deviceEventService,
+            AuthenticatedUserIdResolver authenticatedUserIdResolver
+    ) {
         this.deviceEventService = deviceEventService;
-    }
-
-    private UUID getIdByAuthentication(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        this.authenticatedUserIdResolver = authenticatedUserIdResolver;
     }
 
     @PostMapping
@@ -34,7 +35,7 @@ public class DeviceEventController {
             Authentication authentication,
             @RequestBody @Valid DeviceEventRequest request
     ) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         boolean inserted = deviceEventService.receiveEvent(request.eventId(), userId, request.type(), request.occurredAt());
 
@@ -48,7 +49,7 @@ public class DeviceEventController {
     @PostMapping("/batch")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void batchEvents(@RequestBody @Valid DeviceEventBatchRequest request, Authentication authentication) {
-        UUID userId = getIdByAuthentication(authentication);
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         deviceEventService.receiveBatch(userId, request);
     }
