@@ -16,6 +16,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -90,5 +91,13 @@ public class UserController {
         UUID userId = authenticatedUserIdResolver.resolve(authentication);
 
         return userService.searchUsers(userId, query.strip());
+    }
+
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAccount(Authentication authentication) {
+        UUID userId = authenticatedUserIdResolver.resolve(authentication);
+
+        userService.deleteAccount(userId);
     }
 }

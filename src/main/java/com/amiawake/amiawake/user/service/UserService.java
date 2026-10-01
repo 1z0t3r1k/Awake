@@ -102,4 +102,11 @@ public class UserService {
 
         return searchResponses;
     }
+
+    @Transactional
+    public void deleteAccount(UUID userId) {
+        User user = getUserById(userId);
+
+        userRepository.delete(user);
+    }
 }
