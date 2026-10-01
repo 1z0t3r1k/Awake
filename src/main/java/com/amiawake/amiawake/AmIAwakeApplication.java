@@ -9,7 +9,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ConfigurationPropertiesScan
 @EnableScheduling
 public class AmIAwakeApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(AmIAwakeApplication.class, args);
     }

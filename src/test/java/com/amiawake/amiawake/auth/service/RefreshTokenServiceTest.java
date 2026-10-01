@@ -40,7 +40,7 @@ class RefreshTokenServiceTest {
     void setUp() {
         RefreshTokenProperties refreshTokenProperties = new RefreshTokenProperties(Duration.ofDays(30));
         JwtProperties jwtProperties = new JwtProperties(null, null, Duration.ofMinutes(15));
-        refreshTokenService = new RefreshTokenService(refreshTokenRepository, refreshTokenProperties, jwtService, jwtProperties);
+        refreshTokenService = new RefreshTokenService(refreshTokenRepository, refreshTokenProperties);
     }
 
     @Test

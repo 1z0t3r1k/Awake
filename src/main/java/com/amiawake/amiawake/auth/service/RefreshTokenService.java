@@ -4,8 +4,6 @@ import com.amiawake.amiawake.auth.entity.RefreshToken;
 import com.amiawake.amiawake.auth.properties.RefreshTokenProperties;
 import com.amiawake.amiawake.auth.repository.RefreshTokenRepository;
 import com.amiawake.amiawake.common.exception.InvalidRefreshTokenException;
-import com.amiawake.amiawake.common.security.JwtProperties;
-import com.amiawake.amiawake.common.security.JwtService;
 import com.amiawake.amiawake.user.entity.User;
 import org.springframework.stereotype.Service;
 
@@ -22,17 +20,12 @@ public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenProperties refreshTokenProperties;
     private final SecureRandom secureRandom = new SecureRandom();
-    private final JwtService jwtService;
-    private final JwtProperties jwtProperties;
 
     public RefreshTokenService(
-            RefreshTokenRepository refreshTokenRepository, RefreshTokenProperties refreshTokenProperties, JwtService jwtService,
-            JwtProperties jwtProperties
+            RefreshTokenRepository refreshTokenRepository, RefreshTokenProperties refreshTokenProperties
     ) {
         this.refreshTokenRepository = refreshTokenRepository;
         this.refreshTokenProperties = refreshTokenProperties;
-        this.jwtService = jwtService;
-        this.jwtProperties = jwtProperties;
     }
 
     private String generateToken() {
