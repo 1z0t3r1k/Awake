@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/am_i_awake
-    username: postgres
-    password: postgres
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   jpa:
     open-in-view: false
@@ -22,8 +22,8 @@ spring:
     time-zone: UTC
 
 jwt:
-  private-key: file:./secrets/private.pem
-  public-key: file:./secrets/public.pem
+  private-key: ${JWT_PRIVATE_KEY:file:./secrets/private.pem}
+  public-key: ${JWT_PUBLIC_KEY:file:./secrets/public.pem}
   access-token-ttl: 15m
 
 refresh-token:
