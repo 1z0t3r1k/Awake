@@ -1,117 +1,81 @@
 <div align="center">
 
-# Awake?
+# Am I Awake?
+
+**Before you call, check if they're awake.**
+
+Am I Awake? gives friends a little context before reaching out:<br>
+who's awake, who welcomes a call, and who would rather get a message.
 
 ![Java](https://img.shields.io/badge/Java-backend-E76F00?style=flat-square)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-API-6DB33F?style=flat-square)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-4169E1?style=flat-square)
-
-**Awake?** is a social availability app that helps friends understand whether it is a good time to call, send a message, or wait until later.
-
-Online presence alone is ambiguous: a person may be awake but busy, available for messages but not calls, or asleep in another time zone. Awake? is intended to make that context explicit.
+![Kotlin](https://img.shields.io/badge/Kotlin-Android-7F52FF?style=flat-square)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-UI-4285F4?style=flat-square)
 
 </div>
 
-## Project status
+## Features
 
-The repository currently focuses on the Java backend. Authentication and session management are implemented; the product features and Android client are the next part of the project.
+- **Friends** — search, friend requests, and shared availability.
+- **Availability** — Available, Text only, or Do not disturb.
+- **Sleep estimates** — screen activity, unlocks, heartbeats, and sleep signals.
+- **Schedules** — sleeping hours interpreted in each person's time zone.
 
-### Implemented
+When signals are stale or insufficient, the app shows **Unknown**.
 
-- User registration and authentication
-- Short-lived JWT access tokens
-- Opaque refresh tokens generated with `SecureRandom`
-- Refresh tokens stored as hashes rather than raw values
-- Refresh token rotation using one database record per session
-- Logout through refresh token revocation
-- Request validation and authentication error responses
-- PostgreSQL persistence with Flyway migrations
+## Backend
 
-### Product scope
+The backend in `src/` is organized by domain, with controllers, services, repositories, and DTOs. Sleep inference uses
+explicit rules and signal freshness; a scheduler refreshes stored states.
 
-| Feature                 | Purpose                                           |
-| :---------------------- | :------------------------------------------------ |
-| **Availability status** | Show whether calls or messages are welcome        |
-| **Friends**             | Share availability with a defined circle of users |
-| **Sleep schedule**      | Reflect expected sleeping hours automatically     |
-| **Time-zone awareness** | Present availability in the correct local context |
-| **Android client**      | Provide a native Kotlin interface for the service |
+| Technology                         | Implementation                                                                               |
+|:-----------------------------------|:---------------------------------------------------------------------------------------------|
+| Java 21 · Spring Boot              | REST API, request validation, centralized error handling.                                    |
+| Spring Security                    | RSA-signed JWTs, BCrypt passwords, rotating refresh tokens stored as SHA-256 hashes.         |
+| PostgreSQL · JPA · JDBC            | Entity persistence, SQL projections, batch inserts, event deduplication with `ON CONFLICT`.  |
+| Flyway · Docker Compose            | Versioned migrations and a local PostgreSQL environment.                                     |
+| Spring transactions & events       | Per-user database locks serialize state calculation; wake notifications run after commit.    |
+| Firebase Admin SDK                 | Push delivery and handling of invalid device registrations.                                  |
+| JUnit 5 · Mockito · Testcontainers | Unit tests and PostgreSQL integration tests for concurrent inference and invalid timestamps. |
 
-The planned availability states are **Available**, **Text only**, **Do not disturb**, and **Sleeping**.
+## Local development
 
-## Backend architecture
+Requires JDK 21, Docker, and Firebase server credentials.
 
-The diagram shows how authentication, request processing, and persistence connect inside the backend.
+<details>
+<summary>Environment and credentials</summary>
 
-```mermaid
-flowchart TB
-    Client[API client]
+- Set `DB_URL` to `jdbc:postgresql://localhost:5432/am_i_awake`, with `DB_USERNAME=postgres` and `DB_PASSWORD=postgres`
+  for the local database.
+- Place RSA keys at `secrets/private.pem` (PKCS#8) and `secrets/public.pem` (X.509). Custom paths use `JWT_PRIVATE_KEY`
+  and `JWT_PUBLIC_KEY` with a `file:` prefix.
+- Set `GOOGLE_APPLICATION_CREDENTIALS` to the path of your Firebase service account JSON.
 
-    subgraph Application[Spring Boot application]
-        Security[Spring Security filter chain]
-        JwtFilter[JWT authentication filter]
-        Jackson[Jackson and Bean Validation]
-        Controller[REST controllers]
-        Service[Application services]
-        Repository[Spring Data JPA repositories]
+</details>
 
-        Security --> JwtFilter
-        JwtFilter --> Jackson
-        Jackson --> Controller
-        Controller --> Service
-        Service --> Repository
-    end
+From the repository root:
 
-    Hibernate[Hibernate]
-    Database[(PostgreSQL)]
-    Flyway[Flyway]
-
-    Client -->|HTTP and JSON| Security
-    Repository --> Hibernate
-    Hibernate --> Database
-    Flyway -->|versioned migrations| Database
-    Controller -->|HTTP response| Client
+```sh
+docker compose up -d
+./mvnw spring-boot:run
 ```
 
-## Authentication flow
+On Windows, use `mvnw.cmd spring-boot:run`.
 
-Access and refresh tokens have separate responsibilities. Access tokens are short-lived JWTs used for API authorization. Refresh tokens are opaque values whose hashes are persisted, allowing sessions to be rotated and explicitly revoked.
+Open `android/` in Android Studio (Android 10+). The emulator uses `http://10.0.2.2:8080/`; a real phone needs a
+reachable backend address. Android push requires its own `android/app/google-services.json`.
 
-```mermaid
-flowchart LR
-    Login[Login] --> Auth[Authentication service]
-    Auth --> Access[JWT access token]
-    Auth --> RawRefresh[Raw refresh token]
+## Authorship
 
-    Access -->|Bearer token| JwtFilter[JWT filter]
-    JwtFilter -->|valid| Request[Authenticated request]
+- **Backend** — written by me: API, authentication, persistence, and application logic.
+- **Android** — developed by ChatGPT Codex, not by me. Kotlin, Jetpack Compose, Retrofit, a persistent event queue, and
+  WorkManager sync.
 
-    RawRefresh -->|hash| Stored[(Refresh token record)]
-    RawRefresh -->|refresh request| Validate{Active and not expired?}
-    Stored --> Validate
-
-    Validate -->|yes| Rotate[Generate token and replace stored hash]
-    Rotate --> NewAccess[New access token]
-    Rotate --> NewRefresh[New refresh token]
-    NewRefresh -->|hash| Stored
-
-    Validate -->|no| Unauthorized[401 Unauthorized]
-    Logout[Logout] -->|set revoked timestamp| Stored
-```
-
-After rotation, the previous refresh token no longer matches the stored hash and cannot be used again. Logout marks the session record as revoked.
+---
 
 <div align="center">
 
-## Tech stack
-
-| Area                    | Technologies                                              |
-| :---------------------- | :-------------------------------------------------------- |
-| **Backend**             | Java, Spring Boot                                         |
-| **Authentication**      | Spring Security, JWT access tokens, opaque refresh tokens |
-| **Persistence**         | PostgreSQL, Spring Data JPA, Hibernate                    |
-| **Database migrations** | Flyway                                                    |
-| **API boundary**        | Jackson, Bean Validation                                  |
-| **Mobile client**       | Kotlin, Android _(planned)_                               |
+[Sleep inference rules](docs/inference-v1.md)
 
 </div>
