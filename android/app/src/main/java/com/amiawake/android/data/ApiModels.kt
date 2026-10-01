@@ -30,6 +30,8 @@ data class UserResponse(
 @Serializable data class TimeZoneRequest(val zoneId: String)
 @Serializable data class UserSearchResponse(val userId: String, val username: String, val displayName: String)
 
+@Serializable data class DeviceRegistrationRequest(val firebaseInstallationId: String)
+
 @Serializable data class FriendRequest(val username: String)
 @Serializable
 data class FriendResponse(

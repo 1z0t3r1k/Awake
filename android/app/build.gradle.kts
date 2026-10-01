@@ -5,6 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+if (file("google-services.json").exists()) apply(plugin = "com.google.gms.google-services")
+
 android {
     namespace = "com.amiawake.android"
     compileSdk = 35
@@ -16,7 +18,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+        val apiBaseUrl = providers.gradleProperty("apiBaseUrl").orElse("http://10.0.2.2:8080/").get()
+        require(apiBaseUrl.endsWith("/")) { "apiBaseUrl must end with /" }
+        buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl}\"")
     }
 
     buildFeatures {
@@ -35,6 +39,13 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-installations")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
 
     implementation(composeBom)

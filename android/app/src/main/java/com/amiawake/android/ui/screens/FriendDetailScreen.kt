@@ -40,7 +40,7 @@ import com.amiawake.android.ui.model.freshnessLabel
 import com.amiawake.android.ui.model.title
 
 @Composable
-fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, onDelete: (String) -> Unit) {
+fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, deleting: Boolean, onDelete: (String) -> Unit) {
     var confirmDelete by remember { mutableStateOf(false) }
     if (friend == null) {
         Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -97,12 +97,13 @@ fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, onDelete
         Spacer(Modifier.height(36.dp))
         OutlinedButton(
             onClick = { confirmDelete = true },
+            enabled = !deleting,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(Icons.Outlined.DeleteOutline, null)
             Spacer(Modifier.padding(4.dp))
-            Text("Удалить из друзей")
+            Text(if (deleting) "Удаляем…" else "Удалить из друзей")
         }
     }
 }

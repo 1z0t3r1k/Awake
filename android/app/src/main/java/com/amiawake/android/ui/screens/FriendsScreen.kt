@@ -42,6 +42,7 @@ import com.amiawake.android.ui.components.ConfirmationDialog
 import com.amiawake.android.ui.components.EmptyState
 import com.amiawake.android.ui.components.ErrorState
 import com.amiawake.android.ui.components.FriendCard
+import com.amiawake.android.ui.components.LoadingContent
 import com.amiawake.android.ui.components.UserAvatar
 
 @Composable
@@ -92,6 +93,13 @@ fun FriendsScreen(
         if (searching) {
             SearchResults(state, onSearch, onSend, onAccept, onFriend)
         } else {
+            if (state.initialLoading) {
+                LoadingContent(Modifier.fillMaxSize())
+                return
+            }
+            if (state.loadError != null) {
+                ErrorState(state.loadError, onRefresh)
+            }
             PrimaryTabRow(selectedTabIndex = selectedTab) {
                 Tab(selectedTab == 0, { selectedTab = 0 }, text = { Text("Друзья") })
                 Tab(selectedTab == 1, { selectedTab = 1 }, text = { Text(if (state.friends.incoming.isEmpty()) "Заявки" else "Заявки · ${state.friends.incoming.size}") })

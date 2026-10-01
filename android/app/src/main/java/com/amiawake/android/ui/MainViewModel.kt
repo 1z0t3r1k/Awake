@@ -11,7 +11,9 @@ import com.amiawake.android.data.SleepScheduleResponse
 import com.amiawake.android.data.UserSearchResponse
 import com.amiawake.android.data.userMessage
 import java.time.LocalTime
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import java.time.ZoneId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import retrofit2.HttpException
+import com.amiawake.android.push.PushRegistrationWorker
 
 data class MainUiState(
     val checkingSession: Boolean = true,
@@ -47,32 +50,61 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = _state.asStateFlow()
     private var searchJob: Job? = null
+    private var refreshJob: Job? = null
+    private val actionJobs = mutableMapOf<String, Job>()
 
     init {
         viewModelScope.launch {
             val authenticated = container.sessionStore.current() != null
             _state.update { it.copy(checkingSession = false, authenticated = authenticated) }
-            if (authenticated) refreshAll(initial = true)
+            if (authenticated) {
+                PushRegistrationWorker.enqueue(container.application)
+                refreshAll(initial = true)
+            }
         }
     }
 
     fun authenticate(username: String, password: String, displayName: String, register: Boolean) {
         if (_state.value.isRunning(AUTH_ACTION)) return
         launchAction(AUTH_ACTION, errorTarget = ErrorTarget.AUTH) {
+            require(username.trim().matches(Regex("[A-Za-z0-9_]{3,32}"))) { "Проверьте имя пользователя" }
+            require(password.isNotBlank() && password.length in 8..256) { "Пароль: от 8 до 256 символов" }
             if (register) repository.register(username, password, displayName) else repository.login(username, password)
             _state.update { it.copy(authenticated = true, authError = null) }
+            PushRegistrationWorker.enqueue(container.application)
+            if (register) {
+                try {
+                    repository.configureNewProfile(displayName)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    _state.update { it.copy(message = "Аккаунт создан. Имя и часовой пояс можно настроить в профиле.") }
+                }
+            }
             refreshAll(initial = true)
         }
     }
 
     fun logout() = launchAction(LOGOUT_ACTION) {
-        repository.logout()
+        cancelSessionWork(LOGOUT_ACTION)
+        try {
+            repository.logout()
+        } finally {
+            searchJob?.cancel()
+            _state.value = MainUiState(checkingSession = false)
+        }
+    }
+
+    fun deleteAccount() = launchAction(DELETE_ACCOUNT_ACTION) {
+        cancelSessionWork(DELETE_ACCOUNT_ACTION)
+        repository.deleteAccount()
+        searchJob?.cancel()
         _state.value = MainUiState(checkingSession = false)
     }
 
     fun refreshAll(initial: Boolean = false) {
-        if (_state.value.refreshing || _state.value.initialLoading) return
-        viewModelScope.launch {
+        if (!_state.value.authenticated || refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
             _state.update { it.copy(initialLoading = initial && it.dashboard == null, refreshing = !initial, loadError = null) }
             try {
                 val (dashboard, friends, schedule) = supervisorScope {
@@ -83,6 +115,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 _state.update { it.copy(dashboard = dashboard, friends = friends, schedule = schedule) }
             } catch (error: Throwable) {
+                if (error is CancellationException) throw error
                 if (!handleExpiredSession(error)) {
                     val message = error.userMessage(container.network.json)
                     _state.update { it.copy(loadError = message, message = if (it.dashboard != null) message else it.message) }
@@ -112,6 +145,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun updateTimeZone(zoneId: String) = launchAction(PROFILE_ACTION) {
         require(zoneId.isNotBlank()) { "Укажите часовой пояс" }
+        require(runCatching { ZoneId.of(zoneId.trim()) }.isSuccess) { "Укажите корректный часовой пояс" }
         val user = repository.updateTimeZone(zoneId)
         _state.update { it.copy(dashboard = it.dashboard?.copy(user = user, status = user.status), message = "Часовой пояс обновлён") }
     }
@@ -123,13 +157,14 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             _state.update { it.copy(searchResults = emptyList(), searchLoading = false) }
             return
         }
+        _state.update { it.copy(searchResults = emptyList(), searchLoading = true) }
         searchJob = viewModelScope.launch {
             delay(350)
-            _state.update { it.copy(searchLoading = true) }
             try {
                 val results = repository.searchUsers(query)
                 if (_state.value.searchQuery == query) _state.update { it.copy(searchResults = results, searchLoading = false) }
             } catch (error: Throwable) {
+                if (error is CancellationException) throw error
                 if (!handleExpiredSession(error) && _state.value.searchQuery == query) {
                     _state.update { it.copy(searchLoading = false, searchError = error.userMessage(container.network.json)) }
                 }
@@ -169,6 +204,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun saveSchedule(sleepTime: LocalTime, wakeTime: LocalTime) = launchAction(SCHEDULE_ACTION) {
+        require(sleepTime != wakeTime) { "Время сна и пробуждения должны отличаться" }
         val schedule = repository.saveSchedule(sleepTime.toString(), wakeTime.toString())
         _state.update { it.copy(schedule = schedule, message = "Расписание сохранено") }
     }
@@ -195,27 +231,40 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(friends = friends) }
     }
 
+    private fun cancelSessionWork(except: String) {
+        searchJob?.cancel()
+        refreshJob?.cancel()
+        actionJobs.filterKeys { it != except }.values.toList().forEach { it.cancel() }
+    }
+
     private fun launchAction(action: String, errorTarget: ErrorTarget = ErrorTarget.MESSAGE, block: suspend () -> Unit) {
-        if (_state.value.isRunning(action)) return
-        viewModelScope.launch {
+        if (actionJobs[action]?.isActive == true) return
+        if (actionJobs[LOGOUT_ACTION]?.isActive == true || actionJobs[DELETE_ACCOUNT_ACTION]?.isActive == true) return
+        if (action != AUTH_ACTION && !_state.value.authenticated) return
+        val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             _state.update { it.copy(runningActions = it.runningActions + action, authError = if (errorTarget == ErrorTarget.AUTH) null else it.authError) }
             try {
                 block()
             } catch (error: Throwable) {
+                if (error is CancellationException) throw error
                 if (errorTarget == ErrorTarget.AUTH || !handleExpiredSession(error)) {
-                    val message = error.userMessage(container.network.json)
+                    val message = error.userMessage(container.network.json, authenticating = errorTarget == ErrorTarget.AUTH)
                     _state.update { if (errorTarget == ErrorTarget.AUTH) it.copy(authError = message) else it.copy(message = message) }
                 }
             } finally {
                 _state.update { it.copy(runningActions = it.runningActions - action) }
+                actionJobs.remove(action)
             }
         }
+        actionJobs[action] = job
+        job.start()
     }
 
     private suspend fun handleExpiredSession(error: Throwable): Boolean {
         if (error !is HttpException || error.code() != 401) return false
 
-        container.sessionStore.clear()
+        if (container.sessionStore.current() != null) return false
+        searchJob?.cancel()
         _state.value = MainUiState(
             checkingSession = false,
             authError = "Сессия истекла. Войдите снова.",
@@ -227,6 +276,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     companion object {
         const val AUTH_ACTION = "auth"
+        const val DELETE_ACCOUNT_ACTION = "delete-account"
         const val LOGOUT_ACTION = "logout"
         const val STATUS_ACTION = "status"
         const val FRIEND_REQUEST_ACTION = "friend-request"

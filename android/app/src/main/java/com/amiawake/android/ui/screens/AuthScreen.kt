@@ -53,10 +53,10 @@ fun AuthScreen(loading: Boolean, serverError: String?, onSubmit: (String, String
     val focus = LocalFocusManager.current
     val usernameError = attempted && !validUsername(username)
     val displayNameError = attempted && register && (displayName.isBlank() || displayName.trim().length > 32)
-    val passwordError = attempted && password.length !in 8..256
+    val passwordError = attempted && (password.isBlank() || password.length !in 8..256)
     val submit = {
         attempted = true
-        if (!usernameError && !displayNameError && !passwordError && validUsername(username) && (!register || displayName.isNotBlank()) && password.length in 8..256) {
+        if (!usernameError && !displayNameError && !passwordError && validUsername(username) && (!register || (displayName.isNotBlank() && displayName.trim().length <= 32)) && password.isNotBlank() && password.length in 8..256 && !loading) {
             focus.clearFocus()
             onSubmit(username, password, displayName, register)
         }

@@ -91,7 +91,7 @@ fun AmIAwakeTheme(content: @Composable () -> Unit) {
                 isAppearanceLightStatusBars = !dark
                 isAppearanceLightNavigationBars = !dark
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
         }
     }
     MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = AppTypography, content = content)

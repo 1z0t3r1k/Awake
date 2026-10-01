@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.amiawake.android.AmIAwakeApplication
 import com.amiawake.android.data.DeviceEventType
+import kotlinx.coroutines.CancellationException
 
 class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -17,7 +18,11 @@ class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWor
             onSuccess = { Result.success() },
             // The heartbeat is already durable in EventQueue. A later worker or
             // telemetry event will retry the batch without creating duplicates.
-            onFailure = { Result.success() },
+            onFailure = {
+                if (it is CancellationException) throw it
+                EventSyncWorker.enqueue(applicationContext)
+                Result.success()
+            },
         )
     }
 

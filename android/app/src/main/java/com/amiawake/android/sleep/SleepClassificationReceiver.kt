@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import com.amiawake.android.AmIAwakeApplication
 import com.amiawake.android.data.SleepClassificationRequest
+import com.amiawake.android.telemetry.EventSyncWorker
 import com.google.android.gms.location.SleepClassifyEvent
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
@@ -48,14 +49,15 @@ class SleepClassificationReceiver : BroadcastReceiver() {
                         motion = event.motion,
                         light = event.light,
                     )
-                    runCatching { app.container.repository.sendSleepClassification(request) }
+                    runCatching { app.container.repository.queueSleepClassification(request) }
                         .onSuccess {
-                            Log.d(TAG, "Sent sleep classification for ${request.occurredAt}")
+                            Log.d(TAG, "Queued sleep classification")
                         }
                         .onFailure { error ->
                             Log.e(TAG, "Failed to send sleep classification for ${request.occurredAt}", error)
                         }
                 }
+                EventSyncWorker.enqueue(context)
             } finally {
                 pendingResult.finish()
             }

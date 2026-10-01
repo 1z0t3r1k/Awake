@@ -92,9 +92,11 @@ fun SleepScheduleScreen(
                 Text("Учитывать расписание сна", style = MaterialTheme.typography.titleMedium)
                 Text(if (state.schedule?.enabled == true) "Расписание помогает определению сна" else "Сейчас расписание не учитывается", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
-            Switch(checked = state.schedule?.enabled == true, onCheckedChange = onEnabled, enabled = !loading)
+            Switch(checked = state.schedule?.enabled == true, onCheckedChange = onEnabled, enabled = !loading && state.schedule != null)
         }
-        PrimaryActionButton("Сохранить расписание", { onSave(sleepTime, wakeTime) }, loading, modifier = Modifier.fillMaxWidth())
+        if (sleepTime == wakeTime) Text("Время сна и пробуждения должны отличаться", color = MaterialTheme.colorScheme.error)
+        Text("Часовой пояс: ${state.dashboard?.user?.timeZone ?: "—"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        PrimaryActionButton("Сохранить расписание", { onSave(sleepTime, wakeTime) }, loading, modifier = Modifier.fillMaxWidth(), enabled = sleepTime != wakeTime)
         if (state.schedule != null) {
             OutlinedButton(
                 onClick = { confirmDelete = true },

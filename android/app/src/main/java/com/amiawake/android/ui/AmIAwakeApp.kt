@@ -1,6 +1,11 @@
 package com.amiawake.android.ui
 
 import android.net.Uri
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.firebase.FirebaseApp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -79,6 +84,8 @@ private fun SplashScreen() {
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val navController = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val backStack by navController.currentBackStackEntryAsState()
@@ -139,12 +146,17 @@ private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
                         onDisplayName = viewModel::updateDisplayName,
                         onTimeZone = viewModel::updateTimeZone,
                         onLogout = viewModel::logout,
+                        onDeleteAccount = viewModel::deleteAccount,
+                        pushConfigured = FirebaseApp.getApps(context).isNotEmpty(),
+                        onNotifications = {
+                            if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        },
                     )
                 }
                 composable(Routes.FriendDetail) { entry ->
                     val username = Uri.decode(entry.arguments?.getString("username").orEmpty())
                     val friend = state.friends.friends.firstOrNull { it.username == username }
-                    FriendDetailScreen(friend, padding) { viewModel.removeFriend(it); navController.popBackStack() }
+                    FriendDetailScreen(friend, padding, state.isRunning("remove:$username"), viewModel::removeFriend)
                 }
                 composable(Routes.SleepSchedule) {
                     SleepScheduleScreen(state, padding, viewModel::saveSchedule, viewModel::setScheduleEnabled, viewModel::deleteSchedule)

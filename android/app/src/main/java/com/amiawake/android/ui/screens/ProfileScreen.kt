@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,11 +49,23 @@ fun ProfileScreen(
     onDisplayName: (String) -> Unit,
     onTimeZone: (String) -> Unit,
     onLogout: () -> Unit,
+    onDeleteAccount: () -> Unit,
+    pushConfigured: Boolean,
+    onNotifications: () -> Unit,
 ) {
+    var confirmDelete by remember { mutableStateOf(false) }
     var confirmLogout by remember { mutableStateOf(false) }
     var editField by remember { mutableStateOf<ProfileField?>(null) }
+    var pendingProfileValue by remember { mutableStateOf<String?>(null) }
     val user = state.dashboard?.user
     val profileLoading = state.isRunning(MainViewModel.PROFILE_ACTION)
+    LaunchedEffect(user, pendingProfileValue, profileLoading) {
+        val savedValue = if (editField == ProfileField.DISPLAY_NAME) user?.displayName else user?.timeZone
+        if (pendingProfileValue != null && pendingProfileValue == savedValue && !profileLoading) {
+            editField = null
+            pendingProfileValue = null
+        }
+    }
     if (confirmLogout) ConfirmationDialog(
         title = "Выйти из аккаунта?",
         message = "На этом устройстве потребуется снова ввести имя пользователя и пароль.",
@@ -60,15 +73,22 @@ fun ProfileScreen(
         onConfirm = { confirmLogout = false; onLogout() },
         onDismiss = { confirmLogout = false },
     )
+    if (confirmDelete) ConfirmationDialog(
+        title = "Удалить аккаунт навсегда?",
+        message = "Профиль, друзья и расписание сна будут удалены. Восстановить аккаунт нельзя.",
+        confirmText = "Удалить аккаунт",
+        onConfirm = { confirmDelete = false; onDeleteAccount() },
+        onDismiss = { confirmDelete = false },
+    )
     editField?.let { field ->
         ProfileEditDialog(
             field = field,
             initialValue = if (field == ProfileField.DISPLAY_NAME) user?.displayName.orEmpty() else user?.timeZone.orEmpty(),
             loading = profileLoading,
-            onDismiss = { editField = null },
+            onDismiss = { if (!profileLoading) { editField = null; pendingProfileValue = null } },
             onSave = {
                 if (field == ProfileField.DISPLAY_NAME) onDisplayName(it) else onTimeZone(it)
-                editField = null
+                pendingProfileValue = it
             },
         )
     }
@@ -95,21 +115,32 @@ fun ProfileScreen(
             state.schedule?.let { "${it.sleepTime.take(5)} — ${it.wakeTime.take(5)} · ${if (it.enabled) "учитывается" else "выключено"}" } ?: "Пока не настроено",
             onClick = onSchedule,
         )
+        SettingsRow(
+            Icons.Outlined.CloudDone,
+            "Уведомления друзей",
+            if (pushConfigured) "Разрешить уведомления на этом устройстве" else "Подключение уведомлений пока не настроено",
+            onClick = if (pushConfigured) onNotifications else null,
+        )
         SettingsRow(Icons.Outlined.DarkMode, "Оформление", "Как в настройках устройства")
         Spacer(Modifier.height(28.dp))
         SectionHeader("Синхронизация")
         val pending = state.dashboard?.pendingEventCount ?: 0
         SettingsRow(
-            if (pending == 0) Icons.Outlined.CloudDone else Icons.Outlined.CloudOff,
-            if (pending == 0) "Данные актуальны" else "Ожидает подключения",
-            if (pending == 0) "Фоновая синхронизация работает автоматически" else "Данные обновятся, когда появится интернет",
+            if (pending == 0 && state.loadError == null) Icons.Outlined.CloudDone else Icons.Outlined.CloudOff,
+            if (state.loadError != null) "Не удалось обновить данные" else if (pending == 0) "Нет данных в очереди" else "Ожидает отправки",
+            if (state.loadError != null) "Проверьте подключение и обновите главную страницу" else if (pending == 0) "Фоновая синхронизация работает автоматически" else "В очереди: $pending. Повторим отправку при подключении",
         )
         Spacer(Modifier.height(28.dp))
-        TextButton(onClick = { confirmLogout = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+        TextButton(enabled = !state.isRunning(MainViewModel.LOGOUT_ACTION) && !state.isRunning(MainViewModel.DELETE_ACCOUNT_ACTION), onClick = { confirmLogout = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
             androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, null)
             Spacer(Modifier.padding(4.dp))
-            Text("Выйти из аккаунта")
+            Text(if (state.isRunning(MainViewModel.LOGOUT_ACTION)) "Выходим…" else "Выйти из аккаунта")
         }
+        TextButton(
+            onClick = { confirmDelete = true },
+            enabled = !state.isRunning(MainViewModel.DELETE_ACCOUNT_ACTION) && !state.isRunning(MainViewModel.LOGOUT_ACTION),
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        ) { Text(if (state.isRunning(MainViewModel.DELETE_ACCOUNT_ACTION)) "Удаляем аккаунт…" else "Удалить аккаунт") }
     }
 }
 

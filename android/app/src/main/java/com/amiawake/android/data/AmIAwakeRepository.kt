@@ -1,31 +1,58 @@
 package com.amiawake.android.data
 
 import retrofit2.HttpException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.time.ZoneId
+import android.os.SystemClock
 
 class AmIAwakeRepository(
     private val api: AmIAwakeApi,
     private val sessionStore: SessionStore,
     private val eventQueue: EventQueue,
 ) {
+    private val telemetryMutex = Mutex()
+    private var lastHeartbeatElapsedMillis: Long? = null
+    private var unlockReported = false
+
     suspend fun register(username: String, password: String, displayName: String) {
+        require(displayName.trim().length <= 32) { "Имя должно быть не длиннее 32 символов" }
         api.register(RegisterRequest(username.trim(), password))
         login(username, password)
-        if (displayName.trim().isNotEmpty() && displayName.trim() != username.trim()) {
-            api.setDisplayName(DisplayNameRequest(displayName.trim()))
-        }
     }
 
-    suspend fun login(username: String, password: String) {
-        sessionStore.save(api.login(LoginRequest(username.trim(), password)))
+    suspend fun configureNewProfile(displayName: String) {
+        api.setTimeZone(TimeZoneRequest(ZoneId.systemDefault().id))
+        if (displayName.trim().isNotEmpty()) api.setDisplayName(DisplayNameRequest(displayName.trim()))
     }
 
-    suspend fun logout() {
+    suspend fun login(username: String, password: String) = telemetryMutex.withLock {
+        val tokens = api.login(LoginRequest(username.trim(), password))
+        eventQueue.clear()
+        sessionStore.save(tokens)
+        lastHeartbeatElapsedMillis = null
+        unlockReported = false
+    }
+
+    suspend fun logout() = telemetryMutex.withLock {
         val refreshToken = sessionStore.current()?.refreshToken
         try {
             if (refreshToken != null) api.logout(LogoutRequest(refreshToken))
         } finally {
             sessionStore.clear()
+            eventQueue.clear()
         }
+    }
+
+    suspend fun deleteAccount() = telemetryMutex.withLock {
+        api.deleteAccount()
+        sessionStore.clear()
+        eventQueue.clear()
+    }
+
+    suspend fun registerDevice(installationId: String) = telemetryMutex.withLock {
+        if (sessionStore.current() == null) return@withLock
+        api.registerDevice(DeviceRegistrationRequest(installationId))
     }
 
     suspend fun loadDashboard(): DashboardData {
@@ -33,9 +60,15 @@ class AmIAwakeRepository(
         return DashboardData(
             user = user,
             status = user.status,
-            userState = runCatching { api.getUserState() }.getOrNull(),
+            userState = loadUserState(),
             pendingEventCount = eventQueue.count(),
         )
+    }
+
+    private suspend fun loadUserState(): UserStateResponse? = try {
+        api.getUserState()
+    } catch (error: HttpException) {
+        if (error.code() == 404) null else throw error
     }
 
     suspend fun setStatus(status: AvailabilityStatus): AvailabilityStatus =
@@ -76,22 +109,45 @@ class AmIAwakeRepository(
         api.setSleepScheduleEnabled(SleepScheduleEnabledRequest(enabled))
     suspend fun deleteSchedule() { api.deleteSleepSchedule() }
 
-    suspend fun sendSleepClassification(request: SleepClassificationRequest) {
-        val response = api.sendSleepClassification(request)
-        if (!response.isSuccessful) throw HttpException(response)
+    suspend fun queueSleepClassification(request: SleepClassificationRequest) = telemetryMutex.withLock {
+        if (sessionStore.current() != null) eventQueue.enqueueClassification(request)
     }
 
-    suspend fun queueEvent(type: DeviceEventType) { eventQueue.enqueue(type) }
+    suspend fun queueEvent(type: DeviceEventType): Boolean = telemetryMutex.withLock {
+        if (type == DeviceEventType.SCREEN_OFF) unlockReported = false
+        if (sessionStore.current() == null) return@withLock false
+        val elapsedMillis = SystemClock.elapsedRealtime()
+        if (type == DeviceEventType.HEARTBEAT && lastHeartbeatElapsedMillis?.let {
+                elapsedMillis - it < java.util.concurrent.TimeUnit.MINUTES.toMillis(5)
+            } == true) return@withLock false
+        // USER_PRESENT, SCREEN_ON fallback and activity resume can describe the same unlock.
+        if (type == DeviceEventType.PHONE_UNLOCKED && unlockReported) return@withLock false
+        eventQueue.enqueue(type) // EventQueue stamps occurredAt with Instant.now().
+        if (type == DeviceEventType.HEARTBEAT) lastHeartbeatElapsedMillis = elapsedMillis
+        if (type == DeviceEventType.PHONE_UNLOCKED) unlockReported = true
+        true
+    }
 
-    suspend fun syncEvents(): Int {
+    suspend fun syncEvents(): Int = telemetryMutex.withLock {
         var sent = 0
-        while (true) {
+        while (sessionStore.current() != null) {
             val events = eventQueue.peek()
-            if (events.isEmpty()) return sent
+            if (events.isEmpty() || sessionStore.current() == null) break
             api.sendEventBatch(DeviceEventBatchRequest(events))
             eventQueue.remove(events.mapTo(mutableSetOf()) { it.eventId })
             sent += events.size
         }
+        while (sessionStore.current() != null) {
+            val classifications = eventQueue.peekClassifications()
+            if (classifications.isEmpty()) break
+            for (classification in classifications) {
+                if (sessionStore.current() == null) return@withLock sent
+                api.sendSleepClassification(classification)
+                eventQueue.removeClassification(classification)
+                sent++
+            }
+        }
+        sent
     }
 }
 

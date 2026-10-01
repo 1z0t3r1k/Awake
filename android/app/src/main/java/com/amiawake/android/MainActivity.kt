@@ -1,12 +1,25 @@
 package com.amiawake.android
 
 import android.Manifest
+import android.app.KeyguardManager
+import android.os.PowerManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import com.amiawake.android.data.DeviceEventType
+import com.amiawake.android.telemetry.EventSyncWorker
+import java.util.concurrent.TimeUnit
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,13 +27,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
 import com.amiawake.android.sleep.SleepClassificationReceiver
-import com.amiawake.android.telemetry.TelemetryReceiver
 import com.amiawake.android.ui.AmIAwakeApp
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.SleepSegmentRequest
 
 class MainActivity : ComponentActivity() {
-    private val telemetryReceiver = TelemetryReceiver()
     private val activityRecognitionPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -35,7 +46,37 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { AmIAwakeApp() }
-        ensureSleepApiSubscription()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                val container = (application as AmIAwakeApplication).container
+                container.sessionStore.session.map { it?.sessionId }.distinctUntilChanged().collectLatest { sessionId ->
+                    if (sessionId == null) return@collectLatest
+                    val power = getSystemService(PowerManager::class.java)
+                    val keyguard = getSystemService(KeyguardManager::class.java)
+                    var pendingUnlock = power.isInteractive && !keyguard.isKeyguardLocked
+                    while (true) {
+                        try {
+                            val unlocked = pendingUnlock && container.repository.queueEvent(DeviceEventType.PHONE_UNLOCKED)
+                            pendingUnlock = false
+                            val heartbeat = container.repository.queueEvent(DeviceEventType.HEARTBEAT)
+                            if (unlocked || heartbeat) EventSyncWorker.enqueue(this@MainActivity)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            Log.e(TAG, "Failed to queue presence events", error)
+                        }
+                        delay(TimeUnit.MINUTES.toMillis(5))
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            (application as AmIAwakeApplication).container.sessionStore.session
+                .map { it != null }.distinctUntilChanged().collect { authenticated ->
+                    if (authenticated) ensureSleepApiSubscription()
+                    else ActivityRecognition.getClient(this@MainActivity).removeSleepSegmentUpdates(sleepPendingIntent())
+                }
+        }
     }
 
     private fun ensureSleepApiSubscription() {
@@ -51,17 +92,10 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun subscribeToSleepClassifications() {
-        val receiverIntent = Intent(this, SleepClassificationReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            this,
-            SLEEP_PENDING_INTENT_REQUEST_CODE,
-            receiverIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-        )
         val request = SleepSegmentRequest(SleepSegmentRequest.CLASSIFY_EVENTS_ONLY)
 
         ActivityRecognition.getClient(this)
-            .requestSleepSegmentUpdates(pendingIntent, request)
+            .requestSleepSegmentUpdates(sleepPendingIntent(), request)
             .addOnSuccessListener {
                 Log.d(TAG, "Successfully subscribed to SleepClassifyEvent updates")
             }
@@ -70,21 +104,14 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    override fun onStart() {
-        super.onStart()
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_USER_PRESENT)
-            addAction(Intent.ACTION_POWER_CONNECTED)
-            addAction(Intent.ACTION_POWER_DISCONNECTED)
-        }
-        ContextCompat.registerReceiver(this, telemetryReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-    }
-
-    override fun onStop() {
-        unregisterReceiver(telemetryReceiver)
-        super.onStop()
+    private fun sleepPendingIntent(): PendingIntent {
+        val receiverIntent = Intent(this, SleepClassificationReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            this,
+            SLEEP_PENDING_INTENT_REQUEST_CODE,
+            receiverIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
     }
 
     private companion object {

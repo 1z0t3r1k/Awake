@@ -16,6 +16,8 @@ private val Context.eventDataStore by preferencesDataStore("device_events")
 
 class EventQueue(private val context: Context, private val json: Json) {
     private val eventsKey = stringPreferencesKey("pending_events")
+    private val classificationsKey = stringPreferencesKey("pending_sleep_classifications")
+    private val classificationSerializer = ListSerializer(SleepClassificationRequest.serializer())
     private val mutex = Mutex()
     private val serializer = ListSerializer(DeviceEventRequest.serializer())
 
@@ -37,11 +39,37 @@ class EventQueue(private val context: Context, private val json: Json) {
         writeUnlocked(readUnlocked().filterNot { it.eventId in eventIds })
     }
 
-    suspend fun count(): Int = mutex.withLock { readUnlocked().size }
+    suspend fun enqueueClassification(request: SleepClassificationRequest) = mutex.withLock {
+        writeClassificationsUnlocked((readClassificationsUnlocked() + request).distinct())
+    }
+
+    suspend fun peekClassifications(): List<SleepClassificationRequest> = mutex.withLock {
+        readClassificationsUnlocked().take(100)
+    }
+
+    suspend fun removeClassification(request: SleepClassificationRequest) = mutex.withLock {
+        writeClassificationsUnlocked(readClassificationsUnlocked().filterNot { it == request })
+    }
+
+    private suspend fun readClassificationsUnlocked(): List<SleepClassificationRequest> {
+        val raw = context.eventDataStore.data.first()[classificationsKey] ?: return emptyList()
+        return json.decodeFromString(classificationSerializer, raw)
+    }
+
+    private suspend fun writeClassificationsUnlocked(events: List<SleepClassificationRequest>) {
+        context.eventDataStore.edit { it[classificationsKey] = json.encodeToString(classificationSerializer, events) }
+    }
+
+    suspend fun clear() = mutex.withLock {
+        writeUnlocked(emptyList())
+        writeClassificationsUnlocked(emptyList())
+    }
+
+    suspend fun count(): Int = mutex.withLock { readUnlocked().size + readClassificationsUnlocked().size }
 
     private suspend fun readUnlocked(): List<DeviceEventRequest> {
         val raw = context.eventDataStore.data.first()[eventsKey] ?: return emptyList()
-        return runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
+        return json.decodeFromString(serializer, raw)
     }
 
     private suspend fun writeUnlocked(events: List<DeviceEventRequest>) {
