@@ -8,7 +8,9 @@ import com.amiawake.amiawake.user.service.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,7 +45,21 @@ public class DeviceRegistrationService {
         }
     }
 
-    public List<DeviceRegistration> getUserDeviceRegistrations(User user) {
-        return deviceRegistrationRepository.findAllByUser(user);
+    public List<DeviceRegistration> getUserDeviceRegistrations(UUID userId) {
+        return deviceRegistrationRepository.findAllByUserId(userService.getUserById(userId));
+    }
+
+    public List<String> getFirebaseInstallationIds(Collection<UUID> ids) {
+        Objects.requireNonNull(ids, "User ids must not be null");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        return deviceRegistrationRepository.findFirebaseInstallationIdsByUserIdIn(ids);
+    }
+
+    @Transactional
+    public void deleteDeviceRegistrationByFid(String fid) {
+        deviceRegistrationRepository.deleteByFirebaseInstallationId(fid);
     }
 }

@@ -18,13 +18,17 @@ public class UserStateScheduler {
         this.userStateCalculationService = userStateCalculationService;
     }
 
-    // TODO: Когда появятся проблемы с findAll -> внедрение Kafka/Batching
     @Scheduled(cron = "0 */15 * * * *")
     public void recalculateUserStates() {
         List<User> users = userRepository.findAll();
 
         for (User user : users) {
-            userStateCalculationService.recalculate(user);
+            try {
+                userStateCalculationService.recalculate(user);
+            } catch (RuntimeException failure) {
+                org.slf4j.LoggerFactory.getLogger(UserStateScheduler.class)
+                        .warn("Could not recalculate state for user {}", user.getId(), failure);
+            }
         }
     }
 }

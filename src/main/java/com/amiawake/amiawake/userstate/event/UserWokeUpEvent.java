@@ -1,6 +1,6 @@
 package com.amiawake.amiawake.userstate.event;
 
-import com.amiawake.amiawake.user.entity.User;
+import java.util.UUID;
 
-public record UserWokeUpEvent(User user) {
+public record UserWokeUpEvent(UUID userId) {
 }

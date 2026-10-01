@@ -10,6 +10,7 @@ import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.service.UserService;
 import com.amiawake.amiawake.userstate.service.UserStateCalculationService;
 import org.springframework.stereotype.Service;
+import com.amiawake.amiawake.user.repository.UserRepository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -21,21 +22,24 @@ import java.util.UUID;
 public class DeviceEventService {
     private final DeviceEventRepository deviceEventRepository;
     private final UserService userService;
+    private final UserRepository userRepository;
     private final DeviceEventBatchRepository deviceEventBatchRepository;
     private final UserStateCalculationService userStateCalculationService;
 
     public DeviceEventService(
-            DeviceEventRepository deviceEventRepository, UserService userService,
+            DeviceEventRepository deviceEventRepository, UserService userService, UserRepository userRepository,
             DeviceEventBatchRepository deviceEventBatchRepository, UserStateCalculationService userStateCalculationService
     ) {
         this.deviceEventRepository = deviceEventRepository;
         this.userService = userService;
+        this.userRepository = userRepository;
         this.deviceEventBatchRepository = deviceEventBatchRepository;
         this.userStateCalculationService = userStateCalculationService;
     }
 
     @Transactional
     public boolean receiveEvent(UUID eventId, UUID userId, DeviceEventType type, Instant occurredAt) {
+        userRepository.lockForInference(userId);
         User user = userService.getUserById(userId);
 
         Instant receivedAt = Instant.now();
@@ -45,7 +49,7 @@ public class DeviceEventService {
         boolean inserted = amountOfEditedRows != 0;
 
         if (inserted) {
-            recalculateStateIfNeeded(user, type);
+            userStateCalculationService.recalculate(user);
         }
 
         return inserted;
@@ -53,6 +57,7 @@ public class DeviceEventService {
 
     @Transactional
     public void receiveBatch(UUID userId, DeviceEventBatchRequest request) {
+        userRepository.lockForInference(userId);
         User user = userService.getUserById(userId);
         List<DeviceEvent> deviceEventList = new ArrayList<>(request.events().size());
 
@@ -67,19 +72,9 @@ public class DeviceEventService {
 
         deviceEventBatchRepository.insertBatch(deviceEventList);
 
-        boolean containsUnlock = deviceEventList.stream()
-                .anyMatch(event ->
-                        event.getType() == DeviceEventType.PHONE_UNLOCKED
-                );
-
-        if (containsUnlock) {
+        if (!deviceEventList.isEmpty()) {
             userStateCalculationService.recalculate(user);
         }
     }
 
-    private void recalculateStateIfNeeded(User user, DeviceEventType type) {
-        if (type == DeviceEventType.PHONE_UNLOCKED) {
-            userStateCalculationService.recalculate(user);
-        }
-    }
 }

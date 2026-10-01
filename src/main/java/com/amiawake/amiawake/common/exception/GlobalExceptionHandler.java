@@ -262,4 +262,19 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.FORBIDDEN)
                 .body(response);
     }
+
+    @ExceptionHandler(PushRegistrationUnregisteredException.class)
+    public ResponseEntity<ApiErrorResponse> handlePushRegistrationUnregisteredException(
+            PushRegistrationUnregisteredException exception
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
 }

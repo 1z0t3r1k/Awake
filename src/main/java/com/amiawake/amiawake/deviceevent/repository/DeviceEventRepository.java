@@ -10,10 +10,23 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface DeviceEventRepository extends JpaRepository<DeviceEvent, UUID> {
+    @Query(value = """
+            SELECT DISTINCT ON (type) * FROM device_events
+            WHERE user_id = :userId AND occurred_at <= :now AND occurred_at <= received_at
+            ORDER BY type, occurred_at DESC, received_at DESC, event_id DESC
+            """, nativeQuery = true)
+    List<DeviceEvent> findLatestForInference(@Param("userId") UUID userId, @Param("now") Instant now);
+
+    @Query("""
+            SELECT count(e) FROM DeviceEvent e WHERE e.user = :user AND e.type = :type
+            AND e.occurredAt > :after AND e.occurredAt <= :now AND e.occurredAt <= e.receivedAt
+            """)
+    long countForInference(@Param("user") User user, @Param("type") DeviceEventType type,
+                           @Param("after") Instant after, @Param("now") Instant now);
+
     @Modifying
     @Query(value = "INSERT INTO device_events(event_id, user_id, type, occurred_at, received_at) VALUES (:eventId, :userId, :type, :occurredAt, :receivedAt) ON CONFLICT DO NOTHING",
             nativeQuery = true)
@@ -25,16 +38,4 @@ public interface DeviceEventRepository extends JpaRepository<DeviceEvent, UUID> 
             @Param("receivedAt") Instant receivedAt
     );
 
-    Optional<DeviceEvent> findFirstByUserAndTypeOrderByOccurredAtDesc(
-            User user,
-            DeviceEventType type
-    );
-
-    long countDeviceEventsByUserAndTypeAndOccurredAtAfter(
-            User user,
-            DeviceEventType type,
-            Instant after
-    );
-
-    Optional<DeviceEvent> findFirstByUserAndTypeInOrderByOccurredAtDesc(User user, List<DeviceEventType> type);
 }

@@ -7,6 +7,7 @@ import com.amiawake.amiawake.friendship.service.FriendshipService;
 import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.service.UserService;
 import com.amiawake.amiawake.wakesubscription.entity.WakeSubscription;
+import com.amiawake.amiawake.wakesubscription.projection.WakeSubscriptionInfo;
 import com.amiawake.amiawake.wakesubscription.repository.WakeSubscriptionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,11 +70,26 @@ public class WakeSubscriptionService {
         optionalWakeSubscription.ifPresent(wakeSubscriptionRepository::delete);
     }
 
-    public List<User> getSubscribersForTarget(User target) {
-        List<WakeSubscription> wakeSubscriptions = wakeSubscriptionRepository.findAllByTarget(target);
+    // Called from AFTER_COMMIT: subscription deletion needs its own commit.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public List<UUID> getSubscribersAndRemoveSubscriptions(UUID targetId) {
+        List<WakeSubscriptionInfo> subscriptionInfos =
+                wakeSubscriptionRepository.findWakeSubscriptionInfosByTargetId(targetId);
 
-        return wakeSubscriptions.stream()
-                .map(WakeSubscription::getSubscriber)
+        if (subscriptionInfos.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> subscriberIds = subscriptionInfos.stream()
+                .map(WakeSubscriptionInfo::subscriberId)
                 .toList();
+
+        List<UUID> subscriptionIds = subscriptionInfos.stream()
+                .map(WakeSubscriptionInfo::subscriptionId)
+                .toList();
+
+        wakeSubscriptionRepository.deleteAllByIdIn(subscriptionIds);
+
+        return subscriberIds;
     }
 }

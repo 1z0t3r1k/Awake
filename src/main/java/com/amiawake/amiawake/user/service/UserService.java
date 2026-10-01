@@ -10,6 +10,7 @@ import com.amiawake.amiawake.user.dto.UserSearchResponse;
 import com.amiawake.amiawake.user.entity.AvailabilityStatus;
 import com.amiawake.amiawake.user.entity.User;
 import com.amiawake.amiawake.user.mapper.UserMapper;
+import com.amiawake.amiawake.user.projection.UserNotificationInfo;
 import com.amiawake.amiawake.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -101,6 +103,16 @@ public class UserService {
         }
 
         return searchResponses;
+    }
+
+    public UserNotificationInfo getUserNotificationInfoById(UUID userId) {
+        Optional<UserNotificationInfo> userNotificationInfoOptional = userRepository.findUserNotificationInfoById(userId);
+
+        if (userNotificationInfoOptional.isEmpty()) {
+            throw new UserNotFoundException(userId);
+        }
+
+        return userNotificationInfoOptional.get();
     }
 
     @Transactional

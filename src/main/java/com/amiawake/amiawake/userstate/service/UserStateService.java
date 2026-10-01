@@ -50,7 +50,8 @@ public class UserStateService {
         Optional<UserState> optionalUserState =
                 userStateRepository.findById(user.getId());
 
-        return optionalUserState.map(UserStateMapper::toUserStateResponse).orElseGet(() -> new UserStateResponse(
+        return optionalUserState.filter(state -> state.isFreshAt(java.time.Instant.now()))
+                .map(UserStateMapper::toUserStateResponse).orElseGet(() -> new UserStateResponse(
                 SleepState.UNKNOWN,
                 0.0,
                 Optional.empty()

@@ -1,55 +1,46 @@
 package com.amiawake.amiawake.wakesubscription.service;
 
 import com.amiawake.amiawake.common.exception.PushNotificationException;
-import com.amiawake.amiawake.deviceregistrations.entity.DeviceRegistration;
+import com.amiawake.amiawake.common.exception.PushRegistrationUnregisteredException;
 import com.amiawake.amiawake.deviceregistrations.service.DeviceRegistrationService;
 import com.amiawake.amiawake.notification.service.NotificationService;
-import com.amiawake.amiawake.user.entity.User;
+import com.amiawake.amiawake.user.projection.UserNotificationInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class WakeNotificationService {
-    private final DeviceRegistrationService deviceRegistrationService;
-    private final WakeSubscriptionService wakeSubscriptionService;
-    private final NotificationService notificationService;
     private static final Logger log =
             LoggerFactory.getLogger(WakeNotificationService.class);
+    private final DeviceRegistrationService deviceRegistrationService;
+    private final NotificationService notificationService;
 
     public WakeNotificationService(
-            WakeSubscriptionService wakeSubscriptionService, DeviceRegistrationService deviceRegistrationService,
+            DeviceRegistrationService deviceRegistrationService,
             NotificationService notificationService
     ) {
         this.deviceRegistrationService = deviceRegistrationService;
-        this.wakeSubscriptionService = wakeSubscriptionService;
         this.notificationService = notificationService;
     }
 
-    public List<String> getWakeNotificationRecipients(User target) {
-        List<User> subscribers = wakeSubscriptionService.getSubscribersForTarget(target);
-        List<String> firebaseInstallationIds = new ArrayList<>();
-
-        for (User subscriber : subscribers) {
-            List<DeviceRegistration> deviceRegistrations = deviceRegistrationService.getUserDeviceRegistrations(subscriber);
-
-            for (DeviceRegistration deviceRegistration : deviceRegistrations) {
-                firebaseInstallationIds.add(deviceRegistration.getFirebaseInstallationId());
-            }
-        }
-
-        return firebaseInstallationIds;
+    private List<String> getWakeNotificationRecipients(
+            List<UUID> subscriberIds
+    ) {
+        return deviceRegistrationService
+                .getFirebaseInstallationIds(subscriberIds);
     }
 
-    public void sendWakeNotifications(User target) {
-        List<String> subscribersFIDs = getWakeNotificationRecipients(target);
+    public void sendWakeNotifications(UserNotificationInfo target, List<UUID> subscriberIds) {
+        List<String> subscriberFIDs = getWakeNotificationRecipients(subscriberIds);
 
-        String title = target.getDisplayName() + " похоже, уже не спит";
+        String title = target.displayName() + " похоже, уже не спит";
 
-        String body = switch (target.getStatus()) {
+        String body = switch (target.status()) {
             case AVAILABLE -> "Сейчас пользователь доступен для общения";
 
             case TEXT_ONLY -> "Можно написать, но звонки сейчас нежелательны";
@@ -57,13 +48,28 @@ public class WakeNotificationService {
             case DO_NOT_DISTURB -> "Пользователь бодрствует, но просит не беспокоить";
         };
 
-        for (String subscriberFID : subscribersFIDs) {
+        for (String subscriberFID : subscriberFIDs) {
             try {
                 notificationService.sendPushNotification(
                         subscriberFID,
                         title,
                         body
                 );
+            } catch (PushRegistrationUnregisteredException exception) {
+                try {
+                    deviceRegistrationService.deleteDeviceRegistrationByFid(subscriberFID);
+
+                    log.warn(
+                            "FID {} is unregistered and was removed",
+                            subscriberFID
+                    );
+                } catch (DataAccessException cleanupException) {
+                    log.error(
+                            "Failed to remove unregistered FID {}",
+                            subscriberFID,
+                            cleanupException
+                    );
+                }
             } catch (PushNotificationException exception) {
                 log.error(
                         "Failed to send wake notification to FID {}",

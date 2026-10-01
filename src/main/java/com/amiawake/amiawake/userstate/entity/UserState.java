@@ -55,6 +55,12 @@ public class UserState {
         this.calculatedAt = Instant.now();
     }
 
+    // A stored state is an observation, not an indefinitely valid fact.
+    public boolean isFreshAt(Instant now) {
+        return calculatedAt != null && !calculatedAt.isAfter(now)
+                && !calculatedAt.isBefore(now.minus(java.time.Duration.ofMinutes(20)));
+    }
+
     public void updateState(SleepState sleepState, double confidence) {
         Objects.requireNonNull(sleepState, "Sleep state must not be null");
 
