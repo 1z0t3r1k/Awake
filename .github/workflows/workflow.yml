@@ -40,3 +40,33 @@ jobs:
 
           docker tag am-i-awake-backend:ci "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:${{ github.sha }}"
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          IMAGE="ghcr.io/1z0t3r1k/am-i-awake-backend:${{ github.sha }}"
+
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" "
+            cd /opt/am-i-awake &&
+            sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=$IMAGE|' .env.prod &&
+            docker compose --env-file .env.prod -f compose.prod.yaml pull backend &&
+            docker compose --env-file .env.prod -f compose.prod.yaml up -d backend
+          "
