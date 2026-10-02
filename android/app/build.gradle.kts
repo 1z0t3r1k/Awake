@@ -18,7 +18,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        val apiBaseUrl = providers.gradleProperty("apiBaseUrl").orElse("http://10.0.2.2:8080/").get()
+        val apiBaseUrl = providers.gradleProperty("apiBaseUrl").orElse("http://45.15.159.245:8080/").get()
         require(apiBaseUrl.endsWith("/")) { "apiBaseUrl must end with /" }
         buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl}\"")
     }
