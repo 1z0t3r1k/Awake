@@ -5,6 +5,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.ZoneId
 import android.os.SystemClock
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import java.time.Instant
 
 class AmIAwakeRepository(
     private val api: AmIAwakeApi,
@@ -113,7 +118,7 @@ class AmIAwakeRepository(
         if (sessionStore.current() != null) eventQueue.enqueueClassification(request)
     }
 
-    suspend fun queueEvent(type: DeviceEventType): Boolean = telemetryMutex.withLock {
+    suspend fun queueEvent(type: DeviceEventType, occurredAt: Instant = Instant.now()): Boolean = telemetryMutex.withLock {
         if (type == DeviceEventType.SCREEN_OFF) unlockReported = false
         if (sessionStore.current() == null) return@withLock false
         val elapsedMillis = SystemClock.elapsedRealtime()
@@ -122,10 +127,18 @@ class AmIAwakeRepository(
             } == true) return@withLock false
         // USER_PRESENT, SCREEN_ON fallback and activity resume can describe the same unlock.
         if (type == DeviceEventType.PHONE_UNLOCKED && unlockReported) return@withLock false
-        eventQueue.enqueue(type) // EventQueue stamps occurredAt with Instant.now().
+        if (!eventQueue.enqueue(type, occurredAt)) return@withLock false
         if (type == DeviceEventType.HEARTBEAT) lastHeartbeatElapsedMillis = elapsedMillis
         if (type == DeviceEventType.PHONE_UNLOCKED) unlockReported = true
         true
+    }
+
+    suspend fun observeChargingState(context: Context): Boolean {
+        val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return false
+        val plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
+        if (plugged < 0) return false
+        // This is an observation made now, not an invented time for a missed cable event.
+        return queueEvent(if (plugged != 0) DeviceEventType.CHARGING_STARTED else DeviceEventType.CHARGING_STOPPED)
     }
 
     suspend fun syncEvents(): Int = telemetryMutex.withLock {

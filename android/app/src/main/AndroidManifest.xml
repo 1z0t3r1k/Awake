@@ -33,12 +33,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <receiver android:name=".telemetry.TelemetryReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
+        <receiver android:name=".telemetry.MotionReceiver" android:exported="false" />
         <receiver
             android:name=".sleep.SleepClassificationReceiver"
             android:exported="false" />

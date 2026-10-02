@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import com.amiawake.android.data.DeviceEventType
 import com.amiawake.android.telemetry.EventSyncWorker
+import com.amiawake.android.telemetry.MotionReceiver
 import java.util.concurrent.TimeUnit
 import android.annotation.SuppressLint
 import android.app.PendingIntent
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) {
+            subscribeToMotionUpdates()
             subscribeToSleepClassifications()
         } else {
             Log.w(TAG, "ACTIVITY_RECOGNITION permission denied; Sleep API is not subscribed")
@@ -58,8 +60,9 @@ class MainActivity : ComponentActivity() {
                         try {
                             val unlocked = pendingUnlock && container.repository.queueEvent(DeviceEventType.PHONE_UNLOCKED)
                             pendingUnlock = false
+                            val charging = container.repository.observeChargingState(this@MainActivity)
                             val heartbeat = container.repository.queueEvent(DeviceEventType.HEARTBEAT)
-                            if (unlocked || heartbeat) EventSyncWorker.enqueue(this@MainActivity)
+                            if (unlocked || heartbeat || charging) EventSyncWorker.enqueue(this@MainActivity)
                         } catch (error: CancellationException) {
                             throw error
                         } catch (error: Exception) {
@@ -74,7 +77,13 @@ class MainActivity : ComponentActivity() {
             (application as AmIAwakeApplication).container.sessionStore.session
                 .map { it != null }.distinctUntilChanged().collect { authenticated ->
                     if (authenticated) ensureSleepApiSubscription()
-                    else ActivityRecognition.getClient(this@MainActivity).removeSleepSegmentUpdates(sleepPendingIntent())
+                    else {
+                        ActivityRecognition.getClient(this@MainActivity).removeSleepSegmentUpdates(sleepPendingIntent())
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACTIVITY_RECOGNITION) ==
+                            PackageManager.PERMISSION_GRANTED) {
+                            ActivityRecognition.getClient(this@MainActivity).removeActivityUpdates(motionPendingIntent())
+                        }
+                    }
                 }
         }
     }
@@ -84,6 +93,7 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
             PackageManager.PERMISSION_GRANTED
         ) {
+            subscribeToMotionUpdates()
             subscribeToSleepClassifications()
         } else {
             activityRecognitionPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -103,6 +113,17 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "Failed to subscribe to SleepClassifyEvent updates", exception)
             }
     }
+
+    @SuppressLint("MissingPermission")
+    private fun subscribeToMotionUpdates() {
+        ActivityRecognition.getClient(this).requestActivityUpdates(60_000L, motionPendingIntent())
+            .addOnFailureListener { Log.e(TAG, "Failed to subscribe to motion updates", it) }
+    }
+
+    private fun motionPendingIntent(): PendingIntent = PendingIntent.getBroadcast(
+        this, 1002, Intent(this, MotionReceiver::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+    )
 
     private fun sleepPendingIntent(): PendingIntent {
         val receiverIntent = Intent(this, SleepClassificationReceiver::class.java)

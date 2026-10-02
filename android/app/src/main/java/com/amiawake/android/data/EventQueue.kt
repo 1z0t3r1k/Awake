@@ -2,6 +2,8 @@ package com.amiawake.android.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.time.Instant
@@ -21,14 +23,32 @@ class EventQueue(private val context: Context, private val json: Json) {
     private val mutex = Mutex()
     private val serializer = ListSerializer(DeviceEventRequest.serializer())
 
-    suspend fun enqueue(type: DeviceEventType) = mutex.withLock {
+    private val chargingKey = booleanPreferencesKey("last_observed_power_connected")
+    private val motionKey = longPreferencesKey("last_motion_occurred_at")
+
+    suspend fun enqueue(type: DeviceEventType, occurredAt: Instant = Instant.now()): Boolean = mutex.withLock {
+        val preferences = context.eventDataStore.data.first()
+        val connected = when (type) {
+            DeviceEventType.CHARGING_STARTED -> true
+            DeviceEventType.CHARGING_STOPPED -> false
+            else -> null
+        }
+        if (connected != null && preferences[chargingKey] == connected) return@withLock false
+        if (type == DeviceEventType.MOTION && preferences[motionKey]?.let {
+                occurredAt.toEpochMilli() - it < 60_000
+            } == true) return@withLock false
         val event = DeviceEventRequest(
             eventId = UUID.randomUUID().toString(),
             type = type,
-            occurredAt = Instant.now().toString(),
+            occurredAt = occurredAt.toString(),
         )
         val events = readUnlocked() + event
-        writeUnlocked(events)
+        context.eventDataStore.edit {
+            it[eventsKey] = json.encodeToString(serializer, events)
+            if (connected != null) it[chargingKey] = connected
+            if (type == DeviceEventType.MOTION) it[motionKey] = occurredAt.toEpochMilli()
+        }
+        true
     }
 
     suspend fun peek(limit: Int = 500): List<DeviceEventRequest> = mutex.withLock {
@@ -63,6 +83,7 @@ class EventQueue(private val context: Context, private val json: Json) {
     suspend fun clear() = mutex.withLock {
         writeUnlocked(emptyList())
         writeClassificationsUnlocked(emptyList())
+        context.eventDataStore.edit { it.remove(chargingKey); it.remove(motionKey) }
     }
 
     suspend fun count(): Int = mutex.withLock { readUnlocked().size + readClassificationsUnlocked().size }

@@ -12,6 +12,7 @@ class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val app = applicationContext as AmIAwakeApplication
         if (app.container.sessionStore.current() == null) return Result.success()
         return runCatching {
+            app.container.repository.observeChargingState(applicationContext)
             app.container.repository.queueEvent(DeviceEventType.HEARTBEAT)
             app.container.repository.syncEvents()
         }.fold(

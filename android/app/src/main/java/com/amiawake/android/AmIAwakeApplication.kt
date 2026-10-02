@@ -50,6 +50,8 @@ class AmIAwakeApplication : Application() {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
         }
         ContextCompat.registerReceiver(this, TelemetryReceiver(), filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }

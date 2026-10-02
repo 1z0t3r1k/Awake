@@ -119,4 +119,17 @@ class ApiContractTest {
         assertEquals("refresh", tokens.refreshToken)
         assertEquals(900L, tokens.expiresIn)
     }
+
+    @Test fun motionAndPowerEventsUseTheExistingBatchContract() = runBlocking {
+        reply(204)
+        val types = listOf(DeviceEventType.MOTION, DeviceEventType.CHARGING_STARTED, DeviceEventType.CHARGING_STOPPED)
+        val events = types.mapIndexed { index, type -> DeviceEventRequest(
+            "00000000-0000-0000-0000-00000000000${index + 1}", type, "2026-10-02T00:00:00Z") }
+        api.sendEventBatch(DeviceEventBatchRequest(events))
+        val request = server.takeRequest()
+        assertEquals("/api/v1/device-events/batch", request.path)
+        val body = request.body.readUtf8()
+        for (type in types) assertTrue(body.contains("\"type\":\"${type.name}\""))
+        assertEquals(json.encodeToString(DeviceEventBatchRequest.serializer(), DeviceEventBatchRequest(events)), body)
+    }
 }
