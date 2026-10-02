@@ -34,6 +34,10 @@ interface AmIAwakeApi {
     @DELETE("api/v1/friendship/requests/{username}") suspend fun deletePendingRequest(@Path("username") username: String): Unit
     @GET("api/v1/friendship/{username}/state") suspend fun getFriendState(@Path("username") username: String): UserStateResponse
 
+    @GET("api/v1/wake-subscriptions/{username}") suspend fun getWakeSubscription(@Path("username") username: String): WakeSubscriptionResponse
+    @POST("api/v1/wake-subscriptions/{username}") suspend fun subscribeToWake(@Path("username") username: String): Unit
+    @DELETE("api/v1/wake-subscriptions/{username}") suspend fun deleteWakeSubscription(@Path("username") username: String): Unit
+
     @GET("api/v1/sleep-schedule") suspend fun getSleepSchedule(): SleepScheduleResponse
     @PUT("api/v1/sleep-schedule") suspend fun setSleepSchedule(@Body request: SleepScheduleRequest): SleepScheduleResponse
     @PATCH("api/v1/sleep-schedule/enabled") suspend fun setSleepScheduleEnabled(@Body request: SleepScheduleEnabledRequest): SleepScheduleResponse

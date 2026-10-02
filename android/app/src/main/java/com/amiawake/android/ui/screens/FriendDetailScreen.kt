@@ -16,6 +16,9 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.NotificationsActive
+import com.amiawake.android.data.SleepState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,7 +43,11 @@ import com.amiawake.android.ui.model.freshnessLabel
 import com.amiawake.android.ui.model.title
 
 @Composable
-fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, deleting: Boolean, onDelete: (String) -> Unit) {
+fun FriendDetailScreen(
+    friend: FriendResponse?, padding: PaddingValues, deleting: Boolean, onDelete: (String) -> Unit,
+    subscribed: Boolean?, subscriptionLoading: Boolean, subscriptionError: String?,
+    onWakeNotification: () -> Unit, onRetrySubscription: () -> Unit,
+) {
     var confirmDelete by remember { mutableStateOf(false) }
     if (friend == null) {
         Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -94,7 +101,31 @@ fun FriendDetailScreen(friend: FriendResponse?, padding: PaddingValues, deleting
                 }
             }
         }
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(20.dp))
+        Button(
+            onClick = if (subscriptionError != null) onRetrySubscription else onWakeNotification,
+            enabled = !subscriptionLoading && !deleting &&
+                (subscriptionError != null || subscribed == true || (subscribed != null && friend.sleepState != SleepState.AWAKE)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.NotificationsActive, null)
+            Spacer(Modifier.padding(4.dp))
+            Text(when {
+                subscriptionLoading -> "Проверяем…"
+                subscriptionError != null -> "Повторить проверку"
+                subscribed == null -> "Проверяем уведомление…"
+                subscribed -> "Отменить уведомление"
+                friend.sleepState == SleepState.AWAKE -> "Друг уже не спит"
+                else -> "Уведомить, когда проснётся"
+            })
+        }
+        if (subscriptionError != null) Text(subscriptionError, color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
+        else Text(if (subscribed == true) "Уведомление придёт один раз, когда определится пробуждение."
+            else "Сообщим, когда сон сменится бодрствованием.",
+            modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(20.dp))
         OutlinedButton(
             onClick = { confirmDelete = true },
             enabled = !deleting,

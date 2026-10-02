@@ -120,6 +120,22 @@ class ApiContractTest {
         assertEquals(900L, tokens.expiresIn)
     }
 
+    @Test fun wakeSubscriptionSupportsReadCreateAndCancel() = runBlocking {
+        reply(200, """{"subscribed":true}""")
+        assertTrue(api.getWakeSubscription("friend").subscribed)
+        assertEquals("GET", server.takeRequest().method)
+        reply(204)
+        api.subscribeToWake("friend")
+        val subscribe = server.takeRequest()
+        assertEquals("POST", subscribe.method)
+        assertEquals("/api/v1/wake-subscriptions/friend", subscribe.path)
+        reply(204)
+        api.deleteWakeSubscription("friend")
+        val cancel = server.takeRequest()
+        assertEquals("DELETE", cancel.method)
+        assertEquals("/api/v1/wake-subscriptions/friend", cancel.path)
+    }
+
     @Test fun motionAndPowerEventsUseTheExistingBatchContract() = runBlocking {
         reply(204)
         val types = listOf(DeviceEventType.MOTION, DeviceEventType.CHARGING_STARTED, DeviceEventType.CHARGING_STOPPED)

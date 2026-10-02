@@ -36,6 +36,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -85,7 +90,14 @@ private fun SplashScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
     val context = LocalContext.current
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var pendingWakeUsername by remember { mutableStateOf<String?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        pendingWakeUsername?.let { username ->
+            if (granted) viewModel.setWakeSubscription(username, true)
+            else viewModel.showMessage("Разрешите уведомления, чтобы узнать о пробуждении друга")
+        }
+        pendingWakeUsername = null
+    }
     val navController = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val backStack by navController.currentBackStackEntryAsState()
@@ -156,7 +168,24 @@ private fun AppShell(state: MainUiState, viewModel: MainViewModel) {
                 composable(Routes.FriendDetail) { entry ->
                     val username = Uri.decode(entry.arguments?.getString("username").orEmpty())
                     val friend = state.friends.friends.firstOrNull { it.username == username }
-                    FriendDetailScreen(friend, padding, state.isRunning("remove:$username"), viewModel::removeFriend)
+                    LaunchedEffect(username, friend?.sleepStateCalculatedAt) { viewModel.loadWakeSubscription(username) }
+                    FriendDetailScreen(
+                        friend, padding, state.isRunning("remove:$username"), viewModel::removeFriend,
+                        state.wakeSubscriptions[username], state.isRunning("wake:$username"),
+                        state.wakeSubscriptionErrors[username],
+                        onWakeNotification = {
+                            if (state.wakeSubscriptions[username] == true) viewModel.setWakeSubscription(username, false)
+                            else if (FirebaseApp.getApps(context).isEmpty()) viewModel.showMessage("Уведомления пока недоступны")
+                            else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context,
+                                    Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                pendingWakeUsername = username
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                                viewModel.showMessage("Включите уведомления в настройках приложения")
+                            } else viewModel.setWakeSubscription(username, true)
+                        },
+                        onRetrySubscription = { viewModel.loadWakeSubscription(username) },
+                    )
                 }
                 composable(Routes.SleepSchedule) {
                     SleepScheduleScreen(state, padding, viewModel::saveSchedule, viewModel::setScheduleEnabled, viewModel::deleteSchedule)

@@ -39,6 +39,8 @@ data class MainUiState(
     val searchResults: List<UserSearchResponse> = emptyList(),
     val searchLoading: Boolean = false,
     val searchError: String? = null,
+    val wakeSubscriptions: Map<String, Boolean> = emptyMap(),
+    val wakeSubscriptionErrors: Map<String, String> = emptyMap(),
     val runningActions: Set<String> = emptySet(),
     val message: String? = null,
 ) {
@@ -222,6 +224,30 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteSchedule() = launchAction(SCHEDULE_ACTION) {
         repository.deleteSchedule()
         _state.update { it.copy(schedule = null, message = "Расписание удалено") }
+    }
+
+    fun showMessage(message: String) = _state.update { it.copy(message = message) }
+
+    fun loadWakeSubscription(username: String) = launchAction("wake:$username") {
+        _state.update { it.copy(wakeSubscriptionErrors = it.wakeSubscriptionErrors - username) }
+        try {
+            val subscribed = repository.loadWakeSubscription(username)
+            _state.update { it.copy(wakeSubscriptions = it.wakeSubscriptions + (username to subscribed)) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            val message = if (error is HttpException && error.code() == 404) "Сервис уведомлений пока недоступен"
+                else error.userMessage(container.network.json)
+            _state.update { it.copy(wakeSubscriptions = it.wakeSubscriptions - username,
+                wakeSubscriptionErrors = it.wakeSubscriptionErrors + (username to message)) }
+        }
+    }
+
+    fun setWakeSubscription(username: String, subscribed: Boolean) = launchAction("wake:$username") {
+        repository.setWakeSubscription(username, subscribed)
+        _state.update { it.copy(wakeSubscriptions = it.wakeSubscriptions + (username to subscribed),
+            wakeSubscriptionErrors = it.wakeSubscriptionErrors - username,
+            message = if (subscribed) "Сообщим, когда друг проснётся" else "Уведомление отменено") }
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }

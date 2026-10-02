@@ -32,6 +32,8 @@ data class UserResponse(
 
 @Serializable data class DeviceRegistrationRequest(val firebaseInstallationId: String)
 
+@Serializable data class WakeSubscriptionResponse(val subscribed: Boolean)
+
 @Serializable data class FriendRequest(val username: String)
 @Serializable
 data class FriendResponse(

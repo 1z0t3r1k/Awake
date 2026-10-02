@@ -141,6 +141,20 @@ class AmIAwakeRepository(
         return queueEvent(if (plugged != 0) DeviceEventType.CHARGING_STARTED else DeviceEventType.CHARGING_STOPPED)
     }
 
+    suspend fun loadWakeSubscription(username: String): Boolean = api.getWakeSubscription(username).subscribed
+
+    suspend fun setWakeSubscription(username: String, subscribed: Boolean) {
+        if (!subscribed) {
+            api.deleteWakeSubscription(username)
+            return
+        }
+        try {
+            api.subscribeToWake(username)
+        } catch (error: HttpException) {
+            if (error.code() != 409 || !api.getWakeSubscription(username).subscribed) throw error
+        }
+    }
+
     suspend fun syncEvents(): Int = telemetryMutex.withLock {
         var sent = 0
         while (sessionStore.current() != null) {
