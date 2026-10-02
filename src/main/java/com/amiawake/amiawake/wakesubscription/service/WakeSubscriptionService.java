@@ -56,6 +56,16 @@ public class WakeSubscriptionService {
         return wakeSubscriptionRepository.save(wakeSubscription);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isSubscribed(UUID subscriberId, UUID targetId) {
+        User subscriber = userService.getUserById(subscriberId);
+        User target = userService.getUserById(targetId);
+        if (subscriberId.equals(targetId) || !friendshipService.areAcceptedFriends(subscriber, target)) {
+            throw new WakeSubscriptionForbiddenException();
+        }
+        return wakeSubscriptionRepository.existsBySubscriberAndTarget(subscriber, target);
+    }
+
     @Transactional
     public void removeWakeSubscription(UUID subscriberId, UUID targetId) {
         if (subscriberId.equals(targetId)) {

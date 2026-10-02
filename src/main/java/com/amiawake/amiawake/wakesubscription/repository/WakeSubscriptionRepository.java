@@ -19,8 +19,8 @@ public interface WakeSubscriptionRepository extends JpaRepository<WakeSubscripti
 
     @Query("""
             select new com.amiawake.amiawake.wakesubscription.projection.WakeSubscriptionInfo(
-                ws.id,
-                ws.subscriber.id
+                ws.subscriber.id,
+                ws.id
             )
             from WakeSubscription ws
             where ws.target.id = :targetId
