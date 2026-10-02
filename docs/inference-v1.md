@@ -32,4 +32,4 @@ New telemetry triggers recalculation; the scheduler also runs every **15 minutes
 
 These thresholds are practical choices. Confidence is a rule-based score, not measured accuracy, and leaving a phone untouched doesn't necessarily mean sleeping.
 
-The Android client doesn't currently send `MOTION`, so schedule-only and long-inactivity sleep rules can't work yet; strong Google data can still support sleep. Delayed background work, missing events, or incorrect device time can also leave the state unknown.
+Android sends `MOTION` for confidently detected walking, running, cycling, or travel. This needs Google Play services and the physical activity permission; stillness doesn't create a motion event. Delayed background work, missing events, or incorrect device time can still leave the state unknown.
