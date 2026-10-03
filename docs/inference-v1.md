@@ -1,35 +1,28 @@
-# Sleep inference · v1
+# Sleep inference · v2
 
-I estimate sleep from phone activity, the user's schedule, and Google Sleep API data. The result is `AWAKE`, `SLEEPING`, or `UNKNOWN`. When the signals don't agree, I leave the state unknown.
+I estimate whether someone is awake from phone use, Google Sleep API readings, and their bedtime. The API still returns `AWAKE`, `SLEEPING`, or `UNKNOWN`; confidence is a rule-based score, not measured accuracy.
 
-## Start with fresh data
+An `AWAKE` estimate means recent phone use, not that someone is fully awake or ready for a call. Communication availability stays user-controlled.
 
-A heartbeat must be no older than **20 minutes**. Without it, the result is `UNKNOWN`, even if other activity exists.
+## Awake comes first
 
-Events are ordered by when they happened, not when they arrived. Future timestamps are ignored. Screen and charging states expire after **12 hours**; schedules use the user's time zone.
+An unlock within **5 minutes** means `AWAKE` (**0.98**), even without a heartbeat. Within **15 minutes**, it also counts if the screen is on or there were two unlocks in the last 30 minutes (**0.90**). Screen-on or motion alone doesn't prove wakefulness, but blocks sleep.
 
-## Awake
+## When I estimate sleep
 
-- An unlock within **5 minutes** gives `AWAKE` with confidence **0.98**.
-- An unlock within **15 minutes** also counts if the screen is on or there were at least two unlocks in the last **30 minutes**. Confidence is **0.90**.
+- **Google:** confidence **85+**, latest reading within **30 minutes**, and no unlock for **45 minutes**. The screen must be off for 45 minutes or its state unknown. I smooth up to three readings from the last hour, at least five minutes apart: median for three, average for two. Duplicate timestamps count once.
+- **Their bedtime:** screen off and no unlock for **60 minutes**, with no activity in the last **30 minutes**. MOTION is optional. Base confidence is **0.68**.
+- **No bedtime set:** a weaker estimate from **00:00–07:00** in the user's time zone, after **90 minutes** of inactivity (**0.60**). An explicitly disabled schedule disables this fallback too.
+- **Outside bedtime:** the stricter fallback needs **120 minutes** of screen-off and known motion inactivity, plus a heartbeat within **60 minutes** (**0.65**).
 
-Screen-on or motion alone doesn't prove the person is awake.
+A missing unlock history doesn't block sleep when other evidence exists. Charging for **30 minutes** adds a little confidence; it never decides sleep on its own. Scheduled estimates lose confidence when heartbeat is older than **60 minutes**. Without any real phone observation in the last **8 hours**, passive estimates stop.
 
-## Sleeping
+## Avoiding flicker
 
-The screen must have been off for at least **45 minutes**, with no unlock in that time and no motion in the last **30 minutes**. Then I look for one of two supporting signals:
+A low Google estimate blocks new sleep. A single conflicting reading can retain an existing sleep estimate; **two low readings (20 or below)**, recent motion, sustained screen-on, or an unlock clear it. A locked screen lighting up briefly (up to **2 minutes**) can retain previous sleep; screen-off afterwards does not immediately erase that sleep either. Otherwise, previous sleep can survive uncertainty for up to **90 minutes**, with confidence capped at **0.60**. Retention never advances its original calculation time.
 
-- Google Sleep API reports confidence **85 or higher**, from the last **20 minutes**.
-- The user is inside their sleep schedule, and the last known motion was more than **30 minutes** ago but no older than **12 hours**.
+New telemetry and the **15-minute** scheduler recalculate the result. Stored awake/unknown expires after **20 minutes**; sleeping expires after **90 minutes**. A fresh `SLEEPING → AWAKE` transition triggers wake notifications.
 
-Without either, sleep needs a longer quiet period: at least **120 minutes** since screen-off, the last unlock, and the last known motion. That motion must still be within **12 hours**.
+Events use occurrence time, not arrival time. Future-at-receipt events stay invalid; screen and charging history expires after **12 hours**. Unknown still means insufficient or conflicting evidence. A phone left on a table can resemble sleep, and delayed delivery can delay wake detection.
 
-A fresh Google score of **20 or lower** blocks a sleep estimate. Charging for **30 minutes** slightly raises confidence, but never decides the state on its own.
-
-## Updates and limits
-
-New telemetry triggers recalculation; the scheduler also runs every **15 minutes**. A stored result older than **20 minutes** is returned as `UNKNOWN`. Wake notifications require a fresh `SLEEPING → AWAKE` transition.
-
-These thresholds are practical choices. Confidence is a rule-based score, not measured accuracy, and leaving a phone untouched doesn't necessarily mean sleeping.
-
-Android sends `MOTION` for confidently detected walking, running, cycling, or travel. This needs Google Play services and the physical activity permission; stillness doesn't create a motion event. Delayed background work, missing events, or incorrect device time can still leave the state unknown.
+The approach combines [Google's classification guidance](https://developers.google.com/location-context/sleep) with phone-use gaps, as explored in [iSenseSleep](https://mhealth.jmir.org/2019/5/e11930). These thresholds are project choices, not that study's validated algorithm. The longer heartbeat tolerance accounts for [Android Doze](https://developer.android.com/training/monitoring-device-state/doze-standby).

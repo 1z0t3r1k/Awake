@@ -68,7 +68,7 @@ class UserStateCalculationServiceTest {
         var snapshot = mock(UserFeatures.class);
         var state = new UserState(user, SleepState.SLEEPING, 0.8);
         org.springframework.test.util.ReflectionTestUtils.setField(state, "calculatedAt",
-                java.time.Instant.now().minusSeconds(21 * 60));
+                java.time.Instant.now().minusSeconds(91 * 60));
         when(features.buildFeatures(user)).thenReturn(snapshot);
         when(inference.infer(snapshot)).thenReturn(new InferenceResult(SleepState.AWAKE, 0.98));
         when(repository.findById(user.getId())).thenReturn(Optional.of(state));
@@ -88,4 +88,60 @@ class UserStateCalculationServiceTest {
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(publisher);
     }
+
+    @Test
+    void shortAmbiguityKeepsSleepWithoutMovingItsOriginalTimestamp() {
+        var snapshot = mock(UserFeatures.class);
+        var state = new UserState(user, SleepState.SLEEPING, .85);
+        var original = java.time.Instant.now().minusSeconds(30 * 60);
+        org.springframework.test.util.ReflectionTestUtils.setField(state, "calculatedAt", original);
+        when(features.buildFeatures(user)).thenReturn(snapshot);
+        when(inference.infer(snapshot)).thenReturn(new InferenceResult(SleepState.UNKNOWN, 0));
+        when(inference.canRetainSleep(snapshot)).thenReturn(true);
+        when(repository.findById(user.getId())).thenReturn(Optional.of(state));
+        for (int i = 0; i < 10; i++) {
+            var result = service.recalculate(user);
+            org.assertj.core.api.Assertions.assertThat(result.state()).isEqualTo(SleepState.SLEEPING);
+            org.assertj.core.api.Assertions.assertThat(result.confidence()).isEqualTo(.60);
+        }
+        org.assertj.core.api.Assertions.assertThat(state.getCalculatedAt()).isEqualTo(original);
+        verifyNoInteractions(states, publisher);
+
+        org.springframework.test.util.ReflectionTestUtils.setField(state, "calculatedAt", java.time.Instant.now().minusSeconds(91 * 60));
+        service.recalculate(user);
+        verify(states).upsertUserState(user, new InferenceResult(SleepState.UNKNOWN, 0));
+    }
+
+    @Test
+    void wakeAfterShortGapPublishesOnceAndAwakeDoesNotGetTheLongSleepTtl() {
+        var snapshot = mock(UserFeatures.class);
+        var state = new UserState(user, SleepState.SLEEPING, .60);
+        var past = java.time.Instant.now().minusSeconds(30 * 60);
+        org.springframework.test.util.ReflectionTestUtils.setField(state, "calculatedAt", past);
+        when(features.buildFeatures(user)).thenReturn(snapshot);
+        var result = new InferenceResult(SleepState.AWAKE, .98);
+        when(inference.infer(snapshot)).thenReturn(result);
+        when(repository.findById(user.getId())).thenReturn(Optional.of(state));
+        doAnswer(invocation -> { state.updateState(result.state(), result.confidence()); return null; })
+                .when(states).upsertUserState(user, result);
+        service.recalculate(user);
+        service.recalculate(user);
+        verify(publisher, times(1)).publishEvent(new UserWokeUpEvent(user.getId()));
+        org.springframework.test.util.ReflectionTestUtils.setField(state, "calculatedAt", past);
+        org.assertj.core.api.Assertions.assertThat(state.isFreshAt(java.time.Instant.now())).isFalse();
+    }
+
+    @Test
+    void contradictoryActivityClearsSleepEvenDuringTheHoldWindow() {
+        var snapshot = mock(UserFeatures.class);
+        when(features.buildFeatures(user)).thenReturn(snapshot);
+        var result = new InferenceResult(SleepState.UNKNOWN, 0);
+        when(inference.infer(snapshot)).thenReturn(result);
+        when(inference.canRetainSleep(snapshot)).thenReturn(false);
+        when(repository.findById(user.getId())).thenReturn(Optional.of(new UserState(user, SleepState.SLEEPING, .8)));
+        service.recalculate(user);
+        verify(states).upsertUserState(user, result);
+        verifyNoInteractions(publisher);
+    }
+
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.Instant;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,4 +18,15 @@ public interface SleepClassificationRepository extends JpaRepository<SleepClassi
             """, nativeQuery = true)
     Optional<SleepClassificationEvent> findLatestForInference(@Param("userId") UUID userId,
                                                              @Param("now") Instant now);
+
+    // Deduplicate callbacks at the same instant before taking a bounded history.
+    @Query(value = """
+            SELECT DISTINCT ON (occurred_at) * FROM sleep_classification_events
+            WHERE user_id = :userId AND occurred_at >= :since AND occurred_at <= :now
+              AND occurred_at <= received_at AND sleep_confidence BETWEEN 0 AND 100
+            ORDER BY occurred_at DESC, sleep_confidence ASC, id DESC LIMIT 12
+            """, nativeQuery = true)
+    List<SleepClassificationEvent> findRecentForInference(@Param("userId") UUID userId,
+                                                         @Param("since") Instant since,
+                                                         @Param("now") Instant now);
 }

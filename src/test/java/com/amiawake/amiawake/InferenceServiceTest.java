@@ -1,570 +1,160 @@
 package com.amiawake.amiawake;
 
-import com.amiawake.amiawake.inference.model.GoogleSleepFeature;
-import com.amiawake.amiawake.inference.model.InferenceResult;
-import com.amiawake.amiawake.inference.model.UserFeatures;
+import com.amiawake.amiawake.inference.model.*;
 import com.amiawake.amiawake.inference.service.InferenceService;
-import com.amiawake.amiawake.inference.states.ChargingState;
-import com.amiawake.amiawake.inference.states.ScheduleState;
-import com.amiawake.amiawake.inference.states.ScreenState;
-import com.amiawake.amiawake.inference.states.SleepState;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
+import com.amiawake.amiawake.inference.states.*;
 import org.junit.jupiter.api.Test;
-
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Optional;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
-
-@DisplayName("InferenceService")
 class InferenceServiceTest {
-
     private final InferenceService inferenceService = new InferenceService();
 
-    @Nested
-    @DisplayName("Input validation")
-    class InputValidation {
-
-        @Test
-        @DisplayName("should reject null features")
-        void shouldRejectNullFeatures() {
-            assertThatNullPointerException()
-                    .isThrownBy(() -> inferenceService.infer(null))
-                    .withMessage("Features must not be null");
-        }
-    }
-
-    @Nested
-    @DisplayName("Heartbeat")
-    class Heartbeat {
-
-        @Test
-        @DisplayName("should return UNKNOWN when heartbeat is missing")
-        void shouldReturnUnknownWhenHeartbeatIsMissing() {
-            UserFeatures features = features()
-                    .heartbeatMinutes(null)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when heartbeat is stale")
-        void shouldReturnUnknownWhenHeartbeatIsStale() {
-            UserFeatures features = features()
-                    .heartbeatMinutes(21L)
-                    .lastUnlockMinutes(1L)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("heartbeat exactly at freshness limit should still be accepted")
-        void heartbeatExactlyAtLimitShouldBeAccepted() {
-            UserFeatures features = features()
-                    .heartbeatMinutes(20L)
-                    .lastUnlockMinutes(3L)
-                    .build();
-
-            assertResult(features, SleepState.AWAKE, 0.98);
-        }
-    }
-
-    @Nested
-    @DisplayName("Awake detection")
-    class AwakeDetection {
-
-        @Test
-        @DisplayName("should return AWAKE for very recent unlock")
-        void shouldReturnAwakeForVeryRecentUnlock() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(3L)
-                    .build();
-
-            assertResult(features, SleepState.AWAKE, 0.98);
-        }
-
-        @Test
-        @DisplayName("very recent unlock should override strong Google sleep signal")
-        void shouldReturnAwakeWhenVeryRecentUnlockEvenIfGoogleIndicatesSleep() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(3L)
-                    .screenState(ScreenState.OFF)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .googleSleep(96, 2)
-                    .build();
-
-            assertResult(features, SleepState.AWAKE, 0.98);
-        }
-
-        @Test
-        @DisplayName("should return AWAKE after multiple recent unlocks")
-        void shouldReturnAwakeAfterMultipleRecentUnlocks() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(12L)
-                    .unlocksLast30Minutes(2)
-                    .build();
-
-            assertResult(features, SleepState.AWAKE, 0.90);
-        }
-
-        @Test
-        @DisplayName("should return AWAKE when screen is on and unlock was recent")
-        void shouldReturnAwakeWhenScreenOnAndUnlockRecent() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(10L)
-                    .unlocksLast30Minutes(1)
-                    .screenState(ScreenState.ON)
-                    .build();
-
-            assertResult(features, SleepState.AWAKE, 0.90);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when screen is on and motion is very recent")
-        void shouldReturnUnknownWhenScreenOnAndMotionRecent() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(30L)
-                    .screenState(ScreenState.ON)
-                    .lastMotionMinutes(3L)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when screen is on and motion events are frequent")
-        void shouldReturnUnknownWhenScreenOnAndMotionFrequent() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(30L)
-                    .screenState(ScreenState.ON)
-                    .lastMotionMinutes(20L)
-                    .motionEventsLast30Minutes(3)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-    }
-
-    @Nested
-    @DisplayName("Unknown state")
-    class UnknownState {
-
-        @Test
-        @DisplayName("should return UNKNOWN when screen state is unknown")
-        void shouldReturnUnknownWhenScreenStateUnknown() {
-            UserFeatures features = features()
-                    .screenState(ScreenState.UNKNOWN)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when screen is on without enough awake evidence")
-        void shouldReturnUnknownWhenScreenOnWithoutEnoughEvidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(30L)
-                    .screenState(ScreenState.ON)
-                    .lastMotionMinutes(20L)
-                    .motionEventsLast30Minutes(1)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when screen-off duration is missing")
-        void shouldReturnUnknownWhenScreenOffDurationMissing() {
-            UserFeatures features = features()
-                    .screenState(ScreenState.OFF)
-                    .screenOffMinutes(null)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should return UNKNOWN when last unlock is missing")
-        void shouldReturnUnknownWhenLastUnlockMissing() {
-            UserFeatures features = features()
-                    .screenState(ScreenState.OFF)
-                    .lastUnlockMinutes(null)
-                    .screenOffMinutes(60L)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("recent motion should prevent sleeping classification")
-        void recentMotionShouldPreventSleepingClassification() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(90L)
-                    .screenState(ScreenState.OFF)
-                    .screenOffMinutes(90L)
-                    .lastMotionMinutes(5L)
-                    .googleSleep(95, 2)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-    }
-
-    @Nested
-    @DisplayName("Scheduled sleep")
-    class ScheduledSleep {
-
-        @Test
-        @DisplayName("should detect scheduled sleep from screen and unlock inactivity")
-        void shouldDetectScheduledSleep() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(50L)
-                    .screenOffMinutes(50L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.75);
-        }
-
-        @Test
-        @DisplayName("known inactivity supports scheduled sleep")
-        void lowMotionShouldIncreaseScheduledSleepConfidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(50L)
-                    .screenOffMinutes(50L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.75);
-        }
-
-        @Test
-        @DisplayName("long charging should increase scheduled sleep confidence")
-        void chargingShouldIncreaseScheduledSleepConfidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(50L)
-                    .screenOffMinutes(50L)
-                    .lastMotionMinutes(40L)
-                    .chargingState(ChargingState.CHARGING)
-                    .chargingDurationMinutes(40L)
-                    .scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.78);
-        }
-
-        @Test
-        @DisplayName("Google sleep should increase scheduled sleep confidence")
-        void googleShouldIncreaseScheduledSleepConfidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(50L)
-                    .screenOffMinutes(50L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                    .googleSleep(90, 5)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.85);
-        }
-
-        @Test
-        @DisplayName("scheduled sleep confidence should respect upper cap")
-        void scheduledSleepConfidenceShouldRespectUpperCap() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(60L)
-                    .screenOffMinutes(60L)
-                    .lastMotionMinutes(40L)
-                    .chargingState(ChargingState.CHARGING)
-                    .chargingDurationMinutes(40L)
-                    .scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                    .googleSleep(95, 5)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.88);
-        }
-    }
-
-    @Nested
-    @DisplayName("Google Sleep API")
-    class GoogleSleepApi {
-
-        @Test
-        @DisplayName("should detect sleep outside schedule when fresh Google signal is strongly supported")
-        void shouldReturnSleepingWhenGoogleSleepIsFreshAndOtherSignalsSupportSleep() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(75L)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .googleSleep(92, 5)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.82);
-        }
-
-        @Test
-        @DisplayName("should ignore stale Google sleep classification")
-        void shouldIgnoreStaleGoogleSleepClassification() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(75L)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .googleSleep(95, 21)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("should ignore Google sleep confidence below strong threshold")
-        void shouldIgnoreWeakGoogleSleepConfidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(75L)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .googleSleep(84, 5)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("Google threshold value should be treated as strong signal")
-        void googleConfidenceExactlyAtThresholdShouldBeStrong() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(75L)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .googleSleep(85, 5)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.82);
-        }
-
-        @Test
-        @DisplayName("Google classification exactly at freshness limit should be accepted")
-        void googleClassificationExactlyAtFreshnessLimitShouldBeAccepted() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(75L)
-                    .screenOffMinutes(70L)
-                    .lastMotionMinutes(40L)
-                    .googleSleep(95, 20)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.82);
-        }
-
-        @Test
-        @DisplayName("strong Google signal alone should not be enough for sleep")
-        void strongGoogleSignalAloneShouldNotBeEnough() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(30L)
-                    .screenOffMinutes(20L)
-                    .lastMotionMinutes(20L)
-                    .googleSleep(99, 1)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-    }
-
-    @Nested
-    @DisplayName("Unscheduled sleep fallback")
-    class UnscheduledSleep {
-
-        @Test
-        @DisplayName("strong passive evidence detects sleep without schedule or Google")
-        void shouldDetectUnscheduledSleepAfterLongInactivity() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(130L)
-                    .screenOffMinutes(130L)
-                    .lastMotionMinutes(130L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.65);
-        }
-
-        @Test
-        @DisplayName("charging increases confidence but is not required")
-        void chargingShouldIncreaseUnscheduledSleepConfidence() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(130L)
-                    .screenOffMinutes(130L)
-                    .lastMotionMinutes(130L)
-                    .chargingState(ChargingState.CHARGING)
-                    .chargingDurationMinutes(40L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.70);
-        }
-
-        @Test
-        @DisplayName("119 minutes of inactivity should not trigger unscheduled sleep")
-        void shouldNotTriggerUnscheduledSleepBeforeThreshold() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(119L)
-                    .screenOffMinutes(119L)
-                    .lastMotionMinutes(40L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("120 minutes of screen, unlock and known motion inactivity trigger fallback")
-        void shouldTriggerUnscheduledSleepAtThreshold() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(120L)
-                    .screenOffMinutes(120L)
-                    .lastMotionMinutes(120L)
-                    .scheduleState(ScheduleState.OUTSIDE_SLEEP_WINDOW)
-                    .build();
-
-            assertResult(features, SleepState.SLEEPING, 0.65);
-        }
-
-        @Test
-        @DisplayName("recent motion blocks unscheduled fallback")
-        void recentMotionBlocksUnscheduledSleep() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(180L)
-                    .screenOffMinutes(180L)
-                    .lastMotionMinutes(10L)
-                    .scheduleState(ScheduleState.UNKNOWN)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("missing motion does not support unscheduled fallback")
-        void missingMotionDoesNotSupportUnscheduledSleep() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(180L)
-                    .screenOffMinutes(180L)
-                    .lastMotionMinutes(null)
-                    .scheduleState(ScheduleState.UNKNOWN)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("old screen and unlock are insufficient when motion is too recent")
-        void insufficientMotionInactivityDoesNotTriggerFallback() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(180L)
-                    .screenOffMinutes(180L)
-                    .lastMotionMinutes(119L)
-                    .scheduleState(ScheduleState.UNKNOWN)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-
-        @Test
-        @DisplayName("ancient motion does not prove current sensor coverage")
-        void ancientMotionDoesNotTriggerFallback() {
-            UserFeatures features = features()
-                    .lastUnlockMinutes(800L)
-                    .screenOffMinutes(800L)
-                    .lastMotionMinutes(721L)
-                    .scheduleState(ScheduleState.UNKNOWN)
-                    .build();
-
-            assertResult(features, SleepState.UNKNOWN, 0.0);
-        }
-    }
-
     @Test
-    void missingMotionIsNotEvidenceOfInactivity() {
-        assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                .lastMotionMinutes(null).scheduleState(ScheduleState.IN_SLEEP_WINDOW).build(), SleepState.UNKNOWN, 0);
-    }
-
-    @Test
-    void freshGoogleCanSupportSleepWithoutMotionTelemetry() {
-        assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                .lastMotionMinutes(null).googleSleep(90, 5).build(), SleepState.SLEEPING, 0.82);
-    }
-
-    @Test
-    void conflictingGooglePreventsScheduledSleepButDoesNotProveAwake() {
-        assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                .lastMotionMinutes(50L).scheduleState(ScheduleState.IN_SLEEP_WINDOW)
-                .googleSleep(10, 5).build(), SleepState.UNKNOWN, 0);
-    }
-
-    @Test
-    void negativeDurationsCannotProveAwake() {
-        assertResult(features().heartbeatMinutes(-1L).lastUnlockMinutes(1L).build(), SleepState.UNKNOWN, 0);
+    void nullAndFutureDurationsAreRejected() {
+        assertThatNullPointerException().isThrownBy(() -> inferenceService.infer(null));
         assertResult(features().lastUnlockMinutes(-1L).build(), SleepState.UNKNOWN, 0);
+        assertResult(features().heartbeatMinutes(-1L).lastUnlockMinutes(1L).build(), SleepState.UNKNOWN, 0);
     }
 
     @Test
-    void invalidGoogleAgeAndConfidenceAreIgnored() {
-        assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                .lastMotionMinutes(null).googleSleep(90, -1).build(), SleepState.UNKNOWN, 0);
-        assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                .lastMotionMinutes(null).googleSleep(101, 5).build(), SleepState.UNKNOWN, 0);
+    void freshUnlockWinsOverMissingHeartbeatAndSleepSignals() {
+        assertResult(night().heartbeatMinutes(null).lastUnlockMinutes(1L).googleSleep(99, 1).build(), SleepState.AWAKE, .98);
+        assertResult(night().heartbeatMinutes(600L).lastUnlockMinutes(5L).build(), SleepState.AWAKE, .98);
     }
 
     @Test
-    void motionInsideQuietWindowAndAncientMotionCannotSupportSleep() {
-        for (long age : new long[]{10, 20, 30, 721}) {
-            assertResult(features().screenOffMinutes(90L).lastUnlockMinutes(90L)
-                    .lastMotionMinutes(age).scheduleState(ScheduleState.IN_SLEEP_WINDOW).build(), SleepState.UNKNOWN, 0);
+    void sustainedRecentUseNeedsScreenOnOrRepeatedUnlocks() {
+        assertResult(features().lastUnlockMinutes(15L).screenState(ScreenState.ON).build(), SleepState.AWAKE, .90);
+        assertResult(features().lastUnlockMinutes(12L).unlocksLast30Minutes(2).heartbeatMinutes(null).build(), SleepState.AWAKE, .90);
+        assertResult(features().lastUnlockMinutes(6L).build(), SleepState.UNKNOWN, 0);
+        assertResult(features().lastUnlockMinutes(16L).screenState(ScreenState.ON).build(), SleepState.UNKNOWN, 0);
+    }
+
+    @Test
+    void bedtimeWorksWithoutMotionAndWithoutAnUnlockHistory() {
+        assertResult(night().lastMotionMinutes(null).build(), SleepState.SLEEPING, .68);
+        assertResult(night().lastUnlockMinutes(null).lastMotionMinutes(null).build(), SleepState.SLEEPING, .68);
+    }
+
+    @Test
+    void bedtimeEstimateSurvivesDozeButHasLowerConfidence() {
+        assertResult(night().lastMotionMinutes(null).heartbeatMinutes(180L).build(), SleepState.SLEEPING, .60);
+        assertResult(night().lastMotionMinutes(null).heartbeatMinutes(null).build(), SleepState.SLEEPING, .60);
+    }
+
+    @Test
+    void defaultNightIsWeakerAndRequiresNinetyMinutes() {
+        assertResult(night().scheduleState(ScheduleState.IN_DEFAULT_SLEEP_WINDOW).screenOffMinutes(89L).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().scheduleState(ScheduleState.IN_DEFAULT_SLEEP_WINDOW).build(), SleepState.SLEEPING, .64);
+        assertResult(night().scheduleState(ScheduleState.IN_DEFAULT_SLEEP_WINDOW).lastMotionMinutes(null).heartbeatMinutes(null).build(), SleepState.SLEEPING, .55);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {10, 20, 30})
+    void recentMotionBlocksSleepAndRetention(long age) {
+        var f = night().lastMotionMinutes(age).googleSleep(99, 1).build();
+        assertResult(f, SleepState.UNKNOWN, 0);
+        assertThat(inferenceService.canRetainSleep(f)).isFalse();
+    }
+
+    @Test
+    void screenOnAndRecentUnlockCountsBlockSleep() {
+        for (var f : new UserFeatures[]{night().screenState(ScreenState.ON).build(),
+                night().unlocksLast30Minutes(1).build(), night().motionEventsLast30Minutes(1).build()}) {
+            assertResult(f, SleepState.UNKNOWN, 0);
+            assertThat(inferenceService.canRetainSleep(f)).isFalse();
         }
     }
 
-    private void assertResult(
-            UserFeatures features,
-            SleepState expectedState,
-            double expectedConfidence
-    ) {
-        InferenceResult result = inferenceService.infer(features);
-
-        assertThat(result.state())
-                .isEqualTo(expectedState);
-
-        assertThat(result.confidence())
-                .isCloseTo(
-                        expectedConfidence,
-                        org.assertj.core.data.Offset.offset(0.0001)
-                );
+    @Test
+    void noObservationsAndLongOutagesDoNotTurnIntoSleep() {
+        assertResult(features().lastUnlockMinutes(null).lastMotionMinutes(null).screenState(ScreenState.UNKNOWN)
+                .screenOffMinutes(null).heartbeatMinutes(null).scheduleState(ScheduleState.IN_SLEEP_WINDOW).build(), SleepState.UNKNOWN, 0);
+        var outage = night().heartbeatMinutes(481L).lastUnlockMinutes(500L).screenOffMinutes(481L).lastMotionMinutes(null).build();
+        assertResult(outage, SleepState.UNKNOWN, 0);
+        assertThat(inferenceService.canRetainSleep(outage)).isFalse();
+        assertResult(night().heartbeatMinutes(480L).lastUnlockMinutes(500L).screenOffMinutes(480L).lastMotionMinutes(null).build(), SleepState.SLEEPING, .60);
     }
 
-    private TestFeaturesBuilder features() {
-        return new TestFeaturesBuilder();
+    @Test
+    void configuredBedtimeNeedsSixtyQuietMinutes() {
+        assertResult(night().screenOffMinutes(59L).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().lastUnlockMinutes(59L).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().screenOffMinutes(60L).lastUnlockMinutes(60L).build(), SleepState.SLEEPING, .72);
+        assertResult(night().chargingState(ChargingState.CHARGING).chargingDurationMinutes(30L).build(), SleepState.SLEEPING, .75);
     }
 
+    @Test
+    void googleDoesNotRequireHeartbeatOrMotionAndCanSurviveMissedScreenEdge() {
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).lastMotionMinutes(null).heartbeatMinutes(null)
+                .googleSleep(85, 30).build(), SleepState.SLEEPING, .82);
+        assertResult(night().lastMotionMinutes(null).heartbeatMinutes(null).screenState(ScreenState.UNKNOWN)
+                .screenOffMinutes(null).googleSleep(90, 5).build(), SleepState.SLEEPING, .85);
+        assertResult(night().googleSleep(95, 5).chargingState(ChargingState.CHARGING).chargingDurationMinutes(40L).build(), SleepState.SLEEPING, .88);
+    }
+
+    @Test
+    void staleInvalidOrWeakGoogleIsNotEnoughOutsideBedtime() {
+        for (var f : new UserFeatures[]{night().scheduleState(ScheduleState.UNKNOWN).googleSleep(95, 31).build(),
+                night().scheduleState(ScheduleState.UNKNOWN).googleSleep(84, 5).build(),
+                night().scheduleState(ScheduleState.UNKNOWN).googleSleep(101, 5).build(),
+                night().scheduleState(ScheduleState.UNKNOWN).googleSleep(99, -1).build()})
+            assertResult(f, SleepState.UNKNOWN, 0);
+    }
+
+    @Test
+    void oneLowGoogleReadingBlocksNewSleepButCanRetainPreviousSleep() {
+        var f = night().googleSleep(10, 5).build();
+        assertResult(f, SleepState.UNKNOWN, 0);
+        assertThat(inferenceService.canRetainSleep(f)).isTrue();
+        var b = night();
+        b.googleSleepFeature = new GoogleSleepFeature(10, 5, 3, 2);
+        assertResult(b.build(), SleepState.UNKNOWN, 0);
+        assertThat(inferenceService.canRetainSleep(b.build())).isFalse();
+    }
+
+    @Test
+    void unscheduledSleepRequiresCoverageAndKnownMotionInactivity() {
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).screenOffMinutes(120L).lastUnlockMinutes(120L)
+                .lastMotionMinutes(120L).build(), SleepState.SLEEPING, .65);
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).screenOffMinutes(180L).lastUnlockMinutes(180L)
+                .lastMotionMinutes(null).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).screenOffMinutes(180L).lastUnlockMinutes(180L)
+                .lastMotionMinutes(180L).heartbeatMinutes(61L).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).screenOffMinutes(120L).lastUnlockMinutes(120L)
+                .lastMotionMinutes(721L).build(), SleepState.UNKNOWN, 0);
+        assertResult(night().scheduleState(ScheduleState.UNKNOWN).screenOffMinutes(119L).lastUnlockMinutes(120L)
+                .lastMotionMinutes(120L).build(), SleepState.UNKNOWN, 0);
+    }
+
+    @Test
+    void briefLockedScreenWakeCanRetainSleepButCannotStartNewSleep() {
+        var off = night().screenOffMinutes(1L).build();
+        assertResult(off, SleepState.UNKNOWN, 0);
+        assertThat(inferenceService.canRetainSleep(off)).isTrue();
+        for (long screenAge : new long[]{0, 2, 3}) {
+            var f = new UserFeatures(Optional.of(90L), 0, ScreenState.ON, Optional.empty(),
+                    Optional.empty(), 0, ChargingState.UNKNOWN, Optional.empty(),
+                    ScheduleState.IN_SLEEP_WINDOW, Optional.of(5L), Optional.empty(), Optional.of(screenAge));
+            assertResult(f, SleepState.UNKNOWN, 0);
+            assertThat(inferenceService.canRetainSleep(f)).isEqualTo(screenAge <= 2);
+        }
+    }
+
+    private TestFeaturesBuilder features() { return new TestFeaturesBuilder(); }
+    private TestFeaturesBuilder night() {
+        return features().screenOffMinutes(90L).lastUnlockMinutes(90L).lastMotionMinutes(60L)
+                .scheduleState(ScheduleState.IN_SLEEP_WINDOW);
+    }
+    private void assertResult(UserFeatures features, SleepState state, double confidence) {
+        var result = inferenceService.infer(features);
+        assertThat(result.state()).isEqualTo(state);
+        assertThat(result.confidence()).isCloseTo(confidence, within(.0001));
+    }
     private static class TestFeaturesBuilder {
-
-        /*
-         * Defaults are deliberately neutral:
-         *
-         * - heartbeat is fresh
-         * - no recent unlock
-         * - screen is OFF
-         * - inactivity is not long enough to infer sleep
-         * - motion is neither recent nor "low"
-         * - not charging
-         * - outside sleep schedule
-         * - no Google signal
-         *
-         * Therefore the default result should eventually be UNKNOWN.
-         */
 
         private Long lastUnlockMinutes = 60L;
         private long unlocksLast30Minutes = 0;

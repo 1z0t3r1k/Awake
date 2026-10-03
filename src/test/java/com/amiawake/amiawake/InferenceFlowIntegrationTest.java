@@ -1,6 +1,8 @@
 package com.amiawake.amiawake;
 
 import com.amiawake.amiawake.deviceevent.entity.*;
+import com.amiawake.amiawake.sleepclassification.entity.SleepClassificationEvent;
+import com.amiawake.amiawake.sleepclassification.repository.SleepClassificationRepository;
 import com.amiawake.amiawake.deviceevent.repository.DeviceEventRepository;
 import com.amiawake.amiawake.inference.model.UserFeatures;
 import com.amiawake.amiawake.inference.service.UserFeatureService;
@@ -33,6 +35,7 @@ class InferenceFlowIntegrationTest {
     @Autowired UserRepository users;
     @Autowired UserStateRepository states;
     @Autowired DeviceEventRepository events;
+    @Autowired SleepClassificationRepository classifications;
     @Autowired UserStateCalculationService calculation;
     @Autowired WakeEvents published;
     @MockitoBean UserFeatureService features;
@@ -96,4 +99,22 @@ class InferenceFlowIntegrationTest {
                 .containsExactly(valid.getEventId());
         assertThat(events.countForInference(user, DeviceEventType.PHONE_UNLOCKED, now.minusSeconds(1800), now)).isEqualTo(1);
     }
+
+    @Test
+    void recentGoogleQueryDeduplicatesAndRejectsInvalidTimes() {
+        User user = user();
+        Instant now = Instant.now();
+        var older = new SleepClassificationEvent(user, now.minusSeconds(660), 90, 1, 1);
+        var same = new SleepClassificationEvent(user, now.minusSeconds(60), 95, 1, 1);
+        var duplicate = new SleepClassificationEvent(user, now.minusSeconds(60), 10, 1, 1);
+        var future = new SleepClassificationEvent(user, now.plusSeconds(60), 99, 1, 1);
+        var invalid = new SleepClassificationEvent(user, now.minusSeconds(30), 99, 1, 1);
+        org.springframework.test.util.ReflectionTestUtils.setField(invalid, "receivedAt", now.minusSeconds(40));
+        var ancient = new SleepClassificationEvent(user, now.minusSeconds(3660), 99, 1, 1);
+        classifications.saveAllAndFlush(List.of(older, same, duplicate, future, invalid, ancient));
+        assertThat(classifications.findRecentForInference(user.getId(), now.minusSeconds(3600), now))
+                .extracting(SleepClassificationEvent::getSleepConfidence)
+                .containsExactly(10, 90);
+    }
+
 }

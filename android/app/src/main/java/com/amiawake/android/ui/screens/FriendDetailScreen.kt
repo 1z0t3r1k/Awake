@@ -115,14 +115,14 @@ fun FriendDetailScreen(
                 subscriptionError != null -> "Повторить проверку"
                 subscribed == null -> "Проверяем уведомление…"
                 subscribed -> "Отменить уведомление"
-                friend.sleepState == SleepState.AWAKE -> "Друг уже не спит"
+                friend.sleepState == SleepState.AWAKE -> "Есть недавняя активность"
                 else -> "Уведомить, когда проснётся"
             })
         }
         if (subscriptionError != null) Text(subscriptionError, color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
-        else Text(if (subscribed == true) "Уведомление придёт один раз, когда определится пробуждение."
-            else "Сообщим, когда сон сменится бодрствованием.",
+        else Text(if (subscribed == true) "Сообщим один раз об активности после предполагаемого сна. Это не означает готовность к звонку."
+            else "Сообщим об активности после предполагаемого сна. Готовность к звонку задаётся отдельно.",
             modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(20.dp))

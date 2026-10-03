@@ -38,14 +38,14 @@ public class WakeNotificationService {
     public void sendWakeNotifications(UserNotificationInfo target, List<UUID> subscriberIds) {
         List<String> subscriberFIDs = getWakeNotificationRecipients(subscriberIds);
 
-        String title = target.displayName() + " похоже, уже не спит";
+        String title = target.displayName() + " — появилась активность";
 
         String body = switch (target.status()) {
-            case AVAILABLE -> "Сейчас пользователь доступен для общения";
+            case AVAILABLE -> "После предполагаемого сна замечено использование телефона. Статус общения: можно звонить.";
 
-            case TEXT_ONLY -> "Можно написать, но звонки сейчас нежелательны";
+            case TEXT_ONLY -> "После предполагаемого сна замечено использование телефона. Статус общения: лучше написать.";
 
-            case DO_NOT_DISTURB -> "Пользователь бодрствует, но просит не беспокоить";
+            case DO_NOT_DISTURB -> "После предполагаемого сна замечено использование телефона. Пользователь просит не беспокоить.";
         };
 
         for (String subscriberFID : subscriberFIDs) {

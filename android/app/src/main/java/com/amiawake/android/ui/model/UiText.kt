@@ -30,15 +30,15 @@ fun FriendResponse.presenceDescription(): String = when {
 }
 
 fun SleepState.title(forSelf: Boolean = true): String = when (this) {
-    SleepState.AWAKE -> if (forSelf) "Вы сейчас не спите" else "Сейчас не спит"
+    SleepState.AWAKE -> if (forSelf) "Есть активность" else "Недавно пользовался телефоном"
     SleepState.SLEEPING -> if (forSelf) "Похоже, вы спите" else "Похоже, спит"
     SleepState.UNKNOWN -> "Пока недостаточно данных"
 }
 
 fun SleepState.description(): String = when (this) {
-    SleepState.AWAKE -> "Приложение видит недавнюю активность"
+    SleepState.AWAKE -> "Замечено использование телефона. Готовность к общению задаётся отдельно."
     SleepState.SLEEPING -> "Сигналы устройства похожи на сон"
-    SleepState.UNKNOWN -> "Приложению нужно немного времени, чтобы определить состояние"
+    SleepState.UNKNOWN -> "Пока не хватает согласованных сигналов для оценки сна"
 }
 
 fun confidenceLabel(value: Double): String = when {

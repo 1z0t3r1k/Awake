@@ -9,6 +9,7 @@ import com.amiawake.amiawake.inference.states.ChargingState;
 import com.amiawake.amiawake.inference.states.ScheduleState;
 import com.amiawake.amiawake.inference.states.ScreenState;
 import com.amiawake.amiawake.sleepclassification.repository.SleepClassificationRepository;
+import com.amiawake.amiawake.sleepclassification.entity.SleepClassificationEvent;
 import com.amiawake.amiawake.sleepschedule.repository.SleepScheduleRepository;
 import com.amiawake.amiawake.user.entity.User;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
@@ -78,7 +81,8 @@ public class UserFeatureService {
                 age(charging.filter(e -> e.getType() == DeviceEventType.CHARGING_STARTED), now),
                 schedule(user, now),
                 age(Optional.ofNullable(latest.get(DeviceEventType.HEARTBEAT)), now),
-                google(user, now)
+                google(user, now),
+                age(screen, now)
         );
     }
 
@@ -111,26 +115,45 @@ public class UserFeatureService {
     }
 
     private Optional<GoogleSleepFeature> google(User user, Instant now) {
-        return sleepClassificationRepository.findLatestForInference(user.getId(), now)
-                .filter(e -> validTime(e.getOccurredAt(), e.getReceivedAt(), now))
+        var samples = new ArrayList<SleepClassificationEvent>();
+        // At most three distinct observations, at least five minutes apart.
+        // Repeated callbacks must not outweigh independent measurements.
+        sleepClassificationRepository.findRecentForInference(user.getId(), now.minus(Duration.ofHours(1)), now)
+                .stream().filter(e -> validTime(e.getOccurredAt(), e.getReceivedAt(), now))
+                .filter(e -> !e.getOccurredAt().isBefore(now.minus(Duration.ofHours(1))))
                 .filter(e -> e.getSleepConfidence() >= 0 && e.getSleepConfidence() <= 100)
-                .map(e -> new GoogleSleepFeature(
-                        e.getSleepConfidence(),
-                        Duration.between(e.getOccurredAt(), now).toMinutes()
-                ));
+                .sorted(Comparator.comparing(
+                        SleepClassificationEvent::getOccurredAt).reversed())
+                .forEach(e -> {
+                    if (samples.size() < 3 && (samples.isEmpty() ||
+                            Duration.between(e.getOccurredAt(), samples.getLast().getOccurredAt()).toMinutes() >= 5)) {
+                        samples.add(e);
+                    }
+                });
+        if (samples.isEmpty()) return Optional.empty();
+        int[] scores = samples.stream().mapToInt(e -> e.getSleepConfidence()).sorted().toArray();
+        int median = scores.length == 2 ? (scores[0] + scores[1]) / 2 : scores[scores.length / 2];
+        int low = (int) samples.stream().filter(e -> e.getSleepConfidence() <= 20).count();
+        return Optional.of(new GoogleSleepFeature(median,
+                Duration.between(samples.getFirst().getOccurredAt(), now).toMinutes(), scores.length, low));
     }
 
     private ScheduleState schedule(User user, Instant now) {
-        return sleepScheduleRepository.findByUser(user).filter(s -> s.isEnabled()).map(s -> {
-            try {
-                if (user.getTimeZone() == null)
-                    return ScheduleState.UNKNOWN;
-                LocalTime local = now.atZone(ZoneId.of(user.getTimeZone())).toLocalTime();
-                return s.isSleepingAt(local) ? ScheduleState.IN_SLEEP_WINDOW : ScheduleState.OUTSIDE_SLEEP_WINDOW;
-            } catch (DateTimeException invalidZone) {
-                return ScheduleState.UNKNOWN;
+        try {
+            if (user.getTimeZone() == null) return ScheduleState.UNKNOWN;
+            LocalTime local = now.atZone(ZoneId.of(user.getTimeZone())).toLocalTime();
+            var schedule = sleepScheduleRepository.findByUser(user);
+            if (schedule.isPresent()) {
+                if (!schedule.get().isEnabled()) return ScheduleState.UNKNOWN;
+                return schedule.get().isSleepingAt(local)
+                        ? ScheduleState.IN_SLEEP_WINDOW : ScheduleState.OUTSIDE_SLEEP_WINDOW;
             }
-        }).orElse(ScheduleState.UNKNOWN);
+            // Only a weak overnight prior for users who have not set a schedule.
+            return local.isBefore(LocalTime.of(7, 0))
+                    ? ScheduleState.IN_DEFAULT_SLEEP_WINDOW : ScheduleState.UNKNOWN;
+        } catch (DateTimeException invalidZone) {
+            return ScheduleState.UNKNOWN;
+        }
     }
 
     public Optional<Long> getMinutesSinceLastUnlock(User user) {

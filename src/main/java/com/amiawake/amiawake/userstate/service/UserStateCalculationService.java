@@ -11,6 +11,8 @@ import com.amiawake.amiawake.userstate.entity.UserState;
 import com.amiawake.amiawake.userstate.event.UserWokeUpEvent;
 import com.amiawake.amiawake.userstate.repository.UserStateRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ import java.util.Optional;
 
 @Service
 public class UserStateCalculationService {
+    private static final Logger log = LoggerFactory.getLogger(UserStateCalculationService.class);
 
     private final UserFeatureService userFeatureService;
     private final InferenceService inferenceService;
@@ -53,7 +56,15 @@ public class UserStateCalculationService {
         SleepState oldState = optionalOldState.filter(state -> state.isFreshAt(java.time.Instant.now()))
                 .map(UserState::getSleepState)
                 .orElse(SleepState.UNKNOWN);
+        if (newState == SleepState.UNKNOWN && oldState == SleepState.SLEEPING
+                && inferenceService.canRetainSleep(features)) {
+            UserState retained = optionalOldState.orElseThrow();
+            retained.retainSleep();
+            log.debug("Sleep inference: RETAINED_SLEEP for {} since {}", user.getId(), retained.getCalculatedAt());
+            return new InferenceResult(SleepState.SLEEPING, retained.getConfidence());
+        }
         userStateService.upsertUserState(user, result);
+        if (oldState != newState) log.info("Sleep state for {}: {} -> {}", user.getId(), oldState, newState);
         if (oldState == SleepState.SLEEPING && newState == SleepState.AWAKE) {
             applicationEventPublisher.publishEvent(new UserWokeUpEvent(user.getId()));
         }

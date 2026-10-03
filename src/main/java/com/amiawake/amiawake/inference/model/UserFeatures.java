@@ -23,6 +23,15 @@ public record UserFeatures(
 
         Optional<Long> minutesSinceLastHeartbeat,
 
-        Optional<GoogleSleepFeature> googleSleepFeature
+        Optional<GoogleSleepFeature> googleSleepFeature,
+        Optional<Long> minutesSinceLastScreenChange
 ) {
+    public UserFeatures(Optional<Long> unlockAge, long unlockCount, ScreenState screen,
+                        Optional<Long> screenOffAge, Optional<Long> motionAge, long motionCount,
+                        ChargingState charging, Optional<Long> chargingAge, ScheduleState schedule,
+                        Optional<Long> heartbeatAge, Optional<GoogleSleepFeature> google) {
+        this(unlockAge, unlockCount, screen, screenOffAge, motionAge, motionCount, charging,
+                chargingAge, schedule, heartbeatAge, google,
+                screen == ScreenState.OFF ? screenOffAge : Optional.empty());
+    }
 }

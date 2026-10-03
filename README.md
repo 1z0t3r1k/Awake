@@ -61,9 +61,9 @@ Android client -> REST API -> PostgreSQL
 or retry queue, and consuming a subscription does not guarantee push delivery.
 
 See [sleep inference rules and limitations](docs/inference-v1.md) for thresholds and freshness windows. Confidence is
-a rule-based score, not measured prediction accuracy. The Android client currently sends no separate `MOTION` device
-events, so schedule-supported and long-inactivity sleep rules that require them cannot currently activate; fresh,
-strong Google sleep classifications can still support a sleep estimate.
+a rule-based score, not measured prediction accuracy. Nighttime estimates tolerate delayed heartbeats and missing
+motion readings; Google classifications are smoothed, and short gaps can retain previous sleep. Android sends motion
+and charging events when available. Recent phone use is separate from the user's chosen availability for calls.
 
 ## Backend stack
 

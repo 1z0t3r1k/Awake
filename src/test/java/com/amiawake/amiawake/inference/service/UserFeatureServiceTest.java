@@ -104,7 +104,7 @@ class UserFeatureServiceTest {
 
     @Test
     void futureGoogleIsRejected() {
-        when(google.findLatestForInference(user.getId(), now)).thenReturn(Optional.of(
+        when(google.findRecentForInference(user.getId(), now.minusSeconds(3600), now)).thenReturn(List.of(
                 new SleepClassificationEvent(user, now.plusSeconds(60), 99, 1, 1)));
         assertThat(service.buildFeatures(user).googleSleepFeature()).isEmpty();
     }
@@ -130,4 +130,57 @@ class UserFeatureServiceTest {
         when(schedules.findByUser(user)).thenReturn(Optional.of(schedule));
         assertThat(service.getScheduleState(user)).isEqualTo(ScheduleState.UNKNOWN);
     }
+
+    private SleepClassificationEvent classification(int score, long minutesAgo) {
+        var e = new SleepClassificationEvent(user, now.minusSeconds(minutesAgo * 60), score, 1, 1);
+        ReflectionTestUtils.setField(e, "receivedAt", now);
+        return e;
+    }
+
+    @Test
+    void threeSpacedReadingsIgnoreSingleOutlier() {
+        when(google.findRecentForInference(user.getId(), now.minusSeconds(3600), now)).thenReturn(List.of(
+                classification(10, 1), classification(95, 11), classification(90, 21)));
+        var f = service.buildFeatures(user).googleSleepFeature().orElseThrow();
+        assertThat(f.googleSleepConfidence()).isEqualTo(90);
+        assertThat(f.lowConfidenceCount()).isEqualTo(1);
+        assertThat(f.sampleCount()).isEqualTo(3);
+        assertThat(f.minutesSinceLastGoogleSleepClassification()).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateOrCloselySpacedReadingsDoNotBecomeIndependentSamples() {
+        when(google.findRecentForInference(user.getId(), now.minusSeconds(3600), now)).thenReturn(List.of(
+                classification(95, 1), classification(95, 1), classification(95, 2), classification(10, 6)));
+        var f = service.buildFeatures(user).googleSleepFeature().orElseThrow();
+        assertThat(f.sampleCount()).isEqualTo(2);
+        assertThat(f.googleSleepConfidence()).isEqualTo(52);
+    }
+
+    @Test
+    void twoLowReadingsRemainAContradictionAndInvalidHistoryIsIgnored() {
+        var invalid = classification(99, 5);
+        ReflectionTestUtils.setField(invalid, "receivedAt", now.minusSeconds(600));
+        when(google.findRecentForInference(user.getId(), now.minusSeconds(3600), now)).thenReturn(List.of(
+                invalid, classification(99, -1), classification(99, 61),
+                classification(10, 1), classification(90, 11), classification(20, 21)));
+        var f = service.buildFeatures(user).googleSleepFeature().orElseThrow();
+        assertThat(f.googleSleepConfidence()).isEqualTo(20);
+        assertThat(f.lowConfidenceCount()).isEqualTo(2);
+        assertThat(f.sampleCount()).isEqualTo(3);
+    }
+
+    @Test
+    void defaultNightUsesLocalTimezoneAndDoesNotOverrideExplicitSchedule() {
+        assertThat(service.getScheduleState(user)).isEqualTo(ScheduleState.IN_DEFAULT_SLEEP_WINDOW);
+        ReflectionTestUtils.setField(user, "timeZone", "UTC");
+        assertThat(service.getScheduleState(user)).isEqualTo(ScheduleState.UNKNOWN);
+        ReflectionTestUtils.setField(user, "timeZone", "Europe/Moscow");
+        var s = new SleepSchedule(user, LocalTime.of(8, 0), LocalTime.of(16, 0));
+        when(schedules.findByUser(user)).thenReturn(Optional.of(s));
+        assertThat(service.getScheduleState(user)).isEqualTo(ScheduleState.OUTSIDE_SLEEP_WINDOW);
+        s.changeEnabled(false);
+        assertThat(service.getScheduleState(user)).isEqualTo(ScheduleState.UNKNOWN);
+    }
+
 }

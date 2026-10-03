@@ -55,10 +55,16 @@ public class UserState {
         this.calculatedAt = Instant.now();
     }
 
-    // A stored state is an observation, not an indefinitely valid fact.
+    // Sleep can bridge short telemetry gaps; awake still expires quickly.
     public boolean isFreshAt(Instant now) {
         return calculatedAt != null && !calculatedAt.isAfter(now)
-                && !calculatedAt.isBefore(now.minus(java.time.Duration.ofMinutes(20)));
+                && !calculatedAt.isBefore(now.minus(java.time.Duration.ofMinutes(sleepState == SleepState.SLEEPING ? 90 : 20)));
+    }
+
+    public void retainSleep() {
+        if (sleepState != SleepState.SLEEPING) throw new IllegalStateException("Only sleep can be retained");
+        confidence = Math.min(confidence, 0.60);
+        // Do not advance calculatedAt: repeated scheduler runs cannot prolong the hold.
     }
 
     public void updateState(SleepState sleepState, double confidence) {
